@@ -2,6 +2,8 @@ build/
 deps/
 bin/
 
+.cache/
+
 # Prerequisites
 *.d
 
