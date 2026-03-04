@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+repo_root="$(git rev-parse --show-toplevel 2>/dev/null)"
+
 build_dir="build"
 subbuild_dir="${build_dir}/subbuild"
 
@@ -40,3 +42,5 @@ cmake -S . -G "Ninja" -B "${subbuild_dir}" ${cmake_extra_flags} \
 || error_exit "CMake-Config stage"
 
 cmake --build "${subbuild_dir}" -j 16
+
+ln -sf "${subbuild_dir}/compile_commands.json" "${repo_root}/compile_commands.json"

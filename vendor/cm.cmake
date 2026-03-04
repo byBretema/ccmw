@@ -3,7 +3,9 @@ include(FetchContent)
 set(FETCHCONTENT_BASE_DIR ${CMAKE_SOURCE_DIR}/build/deps)
 set(cm_DEPS "" CACHE INTERNAL "")
 
-macro(cm_OLD_STYLE_DEFAULTS cxx_standard)
+get_filename_component(cm_TOPNAME ${CMAKE_CURRENT_SOURCE_DIR} NAME)
+
+macro(cm_INIT cxx_standard)
 
     if(NOT CMAKE_BUILD_TYPE)
         set(CMAKE_BUILD_TYPE Debug)
@@ -97,15 +99,15 @@ function(cm_ADD_EXE proj_name proj_root_dir)
 
     message(STATUS "[cm] · Project : ${proj_name}")
 
-    message(DEBUG "  -- ${proj_root_dir}")
-    message(DEBUG "  -- Sources :")
-    foreach(l_SOURCE IN LISTS l_SOURCES)
-        message(DEBUG "  ---- ${l_SOURCE}")
-    endforeach()
-    message(DEBUG "  -- Headers :")
-    foreach(l_HEADER IN LISTS l_HEADERS)
-        message(DEBUG "  ---- ${l_HEADER}")
-    endforeach()
+    # message(DEBUG "  -- ${proj_root_dir}")
+    # message(DEBUG "  -- Sources :")
+    # foreach(l_SOURCE IN LISTS l_SOURCES)
+    #     message(DEBUG "  ---- ${l_SOURCE}")
+    # endforeach()
+    # message(DEBUG "  -- Headers :")
+    # foreach(l_HEADER IN LISTS l_HEADERS)
+    #     message(DEBUG "  ---- ${l_HEADER}")
+    # endforeach()
 
     add_executable(${proj_name} ${l_SOURCES} ${l_HEADERS})
 

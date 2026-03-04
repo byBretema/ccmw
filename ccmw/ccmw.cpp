@@ -1,11 +1,11 @@
 #define yyEnable_Aliases
 #include "../vendor/y.hpp"
 
-void build(std::span<std::string_view> args) {
+void build(Span<StrView> args) {
 
     std::string_view target = "all";
 
-    for (size_t i = 1; i < args.size(); ++i) {
+    for (size_t i = 0; i < args.size(); ++i) {
 
         bool const not_last = i + 1 < args.size();
         bool const is_target = (args[i] == "--target" || args[i] == "-t");
@@ -30,7 +30,7 @@ int main(i32 argc, char **argv) {
     StrView const command = args[0];
 
     if (command == "build")
-        build(args);
+        build(Span{args.begin()+1, args.end()});
 
     return 0;
 }

@@ -814,11 +814,21 @@ using ETimer = ElapsedTimer;
 
 
 ////////////////////////////////////////////////////////////////////////////////
+//                                   SPANs                                    //
+////////////////////////////////////////////////////////////////////////////////
+
+template<typename T>
+[[nodiscard]] inline Span<T> make_span(auto &container, i32 first, i32 last=-1) {
+    
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
 //                                   FILEs                                    //
 ////////////////////////////////////////////////////////////////////////////////
 #if 1
 
-[[nodiscard]] Str file_read(Str const &input_file) {
+[[nodiscard]] inline Str file_read(Str const &input_file) {
 
     std::ifstream file(input_file, std::ios::ate | std::ios::binary);
     y_defer(file.close());
@@ -836,7 +846,7 @@ using ETimer = ElapsedTimer;
     return content;
 }
 
-b8 file_write(Str const &output_file, char const *data, usize data_size, std::ios_base::openmode mode) {
+inline b8 file_write(Str const &output_file, char const *data, usize data_size, std::ios_base::openmode mode) {
 
     if (!data || data_size < 1) {
         y_err("[file_write] Invalid data: {}", output_file);
