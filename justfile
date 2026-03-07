@@ -16,11 +16,22 @@ build_type := "Release"
 
 
 ################################################################################
+### Interface
+################################################################################
+
+help:
+    @just --list
+
+list:
+    @echo "Available subprojects: {{subprojects}}"
+    @just --list
+
+
+################################################################################
 ### Privates
 ################################################################################
 
-[private]
-config flags="":
+_config flags="":
     @mkdir -p {{subbuild_dir}}
     cmake -S . -G "Ninja" -B {{subbuild_dir}} {{flags}} \
       -DCMAKE_CXX_COMPILER="{{compiler_cpp}}" \
@@ -32,27 +43,13 @@ config flags="":
 
 
 ################################################################################
-### Interface
-################################################################################
-
-default: build
-
-help:
-    @just --list
-
-list:
-    @echo "Available subprojects: {{subprojects}}"
-    @just --list
-
-
-################################################################################
 ### Build
 ################################################################################
 
-build name="all": config
+build name="all": _config
     cmake --build {{subbuild_dir}} -j 24 --target {{name}}
 
-run project="app" *args:
+run project *args: (build project)
     ./{{build_dir}}/bin/{{project}}/{{project}} {{args}}
 
 # test: build
