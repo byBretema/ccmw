@@ -101,7 +101,7 @@ y_info/warn...
 #include <span>
 #include <string>
 #include <string_view>
-#include <thread>
+#include <thread> // IWYU pragma: keep
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -502,7 +502,7 @@ namespace z {
 inline static FILE *s_stdout = nullptr;
 } // namespace z
 
-static void stdout_off() {
+[[maybe_unused]] static void stdout_off() {
     std::fflush(stdout);
 #ifdef _WIN32
     s_stdout = freopen("NUL", "w", stdout);
@@ -511,7 +511,7 @@ static void stdout_off() {
 #endif
 }
 
-static void stdout_on() {
+[[maybe_unused]] static void stdout_on() {
     std::fflush(stdout);
     if (!z::s_stdout)
         return;
@@ -715,7 +715,7 @@ using ETimer = ElapsedTimer;
 
 [[nodiscard]] inline b8 str_contains(StrView str, StrView substr) { return str.find(substr) != std::string::npos; }
 
-[[nodiscard]] Vec<Str> str_split(StrView str, StrView delim) {
+[[nodiscard]] inline Vec<Str> str_split(StrView str, StrView delim) {
     if (delim.empty()) {
         return {};
     }
@@ -734,7 +734,7 @@ using ETimer = ElapsedTimer;
     return splitted;
 }
 
-[[nodiscard]] Str str_join(Vec<Str> const &strlist, Str const &delim) {
+[[nodiscard]] inline Str str_join(Vec<Str> const &strlist, Str const &delim) {
     if (strlist.empty() || delim.empty()) {
         return "";
     }
@@ -750,7 +750,7 @@ using ETimer = ElapsedTimer;
     return s;
 }
 
-[[nodiscard]] Str str_replace(Str str, Str const &from, Str const &to, b8 only_first_match = false) {
+[[nodiscard]] inline Str str_replace(Str str, Str const &from, Str const &to, b8 only_first_match = false) {
     usize pos = 0;
     while ((pos = str.find(from)) < str.size()) {
         str.replace(pos, from.length(), to);
@@ -761,7 +761,7 @@ using ETimer = ElapsedTimer;
     return str;
 }
 
-[[nodiscard]] Str str_replace_many(Str str, Vec<Str> const &from, Vec<Str> const &to, b8 sorted = false) {
+[[nodiscard]] inline Str str_replace_many(Str str, Vec<Str> const &from, Vec<Str> const &to, b8 sorted = false) {
     b8 const same_size = from.size() == to.size();
     b8 const is_empty = same_size && from.size() < 1;
     if (!same_size || is_empty) {
@@ -817,10 +817,10 @@ using ETimer = ElapsedTimer;
 //                                   SPANs                                    //
 ////////////////////////////////////////////////////////////////////////////////
 
-template<typename T>
-[[nodiscard]] inline Span<T> make_span(auto &container, i32 first, i32 last=-1) {
-    
-}
+// template<typename T>
+// [[nodiscard]] inline Span<T> make_span(auto &container, i32 first, i32 last=-1) {
+
+// }
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -898,7 +898,7 @@ inline b8 file_check_extension(Str const &input_file, Str ext_ref) {
     return { FileIt(file), FileIt() }; // Start, End
 }
 
-[[nodiscard]] b8 bin_check_magic(SpanConst<u8> bin, SpanConst<u8> magic) {
+[[nodiscard]] inline b8 bin_check_magic(SpanConst<u8> bin, SpanConst<u8> magic) {
     // Validation
     if (magic.empty() || bin.size() < magic.size()) {
         return false;

@@ -13,6 +13,8 @@ subbuild_dir := build_dir / "subbuild"
 fresh_flag := if path_exists(subbuild_dir) == "true" { "" } else { "--fresh" }
 
 build_type := "Release"
+asan       := "OFF"
+werror     := "OFF"
 
 #! Privates
 
@@ -33,11 +35,12 @@ default:
 [private]
 config flags="":
     @mkdir -p {{subbuild_dir}}
-    cmake -S . -G "Ninja" -B {{subbuild_dir}} {{flags}} {{fresh_flag}}\
-      -DCMAKE_CXX_COMPILER="{{compiler_cpp}}" \
-      -DCMAKE_C_COMPILER="{{compiler_c}}" \
-      -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
-      -DCMAKE_COMPILE_WARNING_AS_ERROR=ON
+    cmake -S . -G "Ninja" -B {{subbuild_dir}} {{flags}} {{fresh_flag}} \
+        -DCMAKE_CXX_COMPILER="{{compiler_cpp}}" \
+        -DCMAKE_C_COMPILER="{{compiler_c}}" \
+        -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+        -DCM_ENABLE_ASAN={{asan}} \
+        -DCM_WARNINGS_AS_ERRORS={{werror}}
     @echo
     ln -sf {{repo_root}}/{{subbuild_dir}}/compile_commands.json {{repo_root}}/compile_commands.json
 

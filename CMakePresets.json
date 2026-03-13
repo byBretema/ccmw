@@ -1,0 +1,90 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 20,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base-config",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/subbuild",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "dev",
+      "displayName": "Development (Debug)",
+      "description": "Standard local build without sanitizers.",
+      "inherits": "base-config",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CM_ENABLE_ASAN": "OFF",
+        "CM_WARNINGS_AS_ERRORS": "OFF"
+      }
+    },
+    {
+      "name": "dev-strict",
+      "displayName": "Development (Debug)",
+      "description": "Standard local build without sanitizers.",
+      "inherits": "base-config",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CM_ENABLE_ASAN": "OFF",
+        "CM_WARNINGS_AS_ERRORS": "ON"
+      }
+    },
+    {
+      "name": "dev-asan",
+      "displayName": "Memory Debugging (ASan)",
+      "description": "Debug build with AddressSanitizer enabled to catch leaks.",
+      "inherits": "base-config",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CM_ENABLE_ASAN": "ON",
+        "CM_WARNINGS_AS_ERRORS": "OFF"
+      }
+    },
+    {
+      "name": "release",
+      "displayName": "Release",
+      "description": "Optimized build for performance testing.",
+      "inherits": "base-config",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CM_ENABLE_ASAN": "OFF",
+        "CM_WARNINGS_AS_ERRORS": "OFF"
+      }
+    },
+    {
+      "name": "release-strict",
+      "displayName": "Strict Release (CI Ready)",
+      "description": "Optimized build that treats all warnings as fatal errors.",
+      "inherits": "release",
+      "cacheVariables": {
+        "CM_WARNINGS_AS_ERRORS": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "dev",
+      "configurePreset": "dev"
+    },
+    {
+      "name": "dev-asan",
+      "configurePreset": "dev-asan"
+    },
+    {
+      "name": "release",
+      "configurePreset": "release"
+    },
+    {
+      "name": "release-strict",
+      "configurePreset": "release-strict"
+    }
+  ]
+}

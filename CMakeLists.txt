@@ -1,7 +1,7 @@
 set(cm_TOPVER 3.28)
 cmake_minimum_required(VERSION ${cm_TOPVER})
 
-include(vendor/cm.cmake)
+include(vendor/cm_setup.cmake)
 project(${cm_TOPNAME})
 
 cm_INIT(20)
