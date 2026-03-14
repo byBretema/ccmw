@@ -1,20 +1,21 @@
 
 #! Vars
 
-repo_root    := `git rev-parse --show-toplevel 2>/dev/null || pwd`
+# repo_root    := `git rev-parse --show-toplevel 2>/dev/null || pwd`
+root         := justfile_directory()
 compiler_cpp := `which clang++`
 compiler_c   := `which clang`
 
 subprojects := `for d in */; do if [ -f "$d/CMakeLists.txt" ]; then echo "${d%/}"; fi; done`
 
-build_dir    := "build"
+build_dir    := root / "build"
 subbuild_dir := build_dir / "subbuild"
 
 fresh_flag := if path_exists(subbuild_dir) == "true" { "" } else { "--fresh" }
 
-build_type := "Release"
-asan       := "OFF"
-werror     := "OFF"
+parallel := "24"
+preset := "dev"
+generator := "Ninja"
 
 #! Privates
 
@@ -33,16 +34,11 @@ default:
     @just -l -u
 
 [private]
-config flags="":
-    @mkdir -p {{subbuild_dir}}
-    cmake -S . -G "Ninja" -B {{subbuild_dir}} {{flags}} {{fresh_flag}} \
-        -DCMAKE_CXX_COMPILER="{{compiler_cpp}}" \
-        -DCMAKE_C_COMPILER="{{compiler_c}}" \
-        -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
-        -DCM_ENABLE_ASAN={{asan}} \
-        -DCM_WARNINGS_AS_ERRORS={{werror}}
+config:
+    @cmake -E make_directory "{{subbuild_dir}}"
+    cmake --preset {{preset}} -G {{generator}}
     @echo
-    ln -sf {{repo_root}}/{{subbuild_dir}}/compile_commands.json {{repo_root}}/compile_commands.json
+    cmake -E copy_if_different "{{subbuild_dir}}/compile_commands.json" "{{root}}/compile_commands.json"
 
 [private]
 [no-exit-message]
@@ -56,11 +52,17 @@ validate target:
 
 # target = all / <project_name>
 build target="all": (validate target) config
-    cmake --build {{subbuild_dir}} -j 24 --target "{{target}}"
+    cmake --build {{subbuild_dir}} -j {{parallel}} --target "{{target}}"
 
 # target = all / <project_name>
 run target *args: (build target)
     ./{{build_dir}}/bin/{{target}}/{{target}} {{args}}
+
+# target = all / <project_name>
+[working-directory("{{subbuild}}")]
+test target *args: (build target)
+    # cmake -E chdir {{subbuild_dir}}
+    ctest --output-on-failure --parallel 8 -C {{preset}}
 
 #! Cleanup
 
@@ -73,4 +75,4 @@ _clean_projects:
 
 _clean_all:
     rm -rf {{build_dir}}
-    rm -f {{repo_root}}/compile_commands.json
+    rm -f {{root}}/compile_commands.json
