@@ -1,10 +1,122 @@
+
+#
+## NEST Framework / CMake
+#################################################################################
 build/
-deps/
-bin/
-
-.cache/
-
+.nest/
 compile_commands.json
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+Testing/
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+
+#
+## C / C++ Compiled Artifacts & Tooling
+################################################################################
+
+# Objects & Libraries
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dylib
+*.dll
+
+# Executables
+*.exe
+*.out
+*.app
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Debug, Linker, & Dependencies
+*.d
+*.pdb
+*.exp
+*.ilk
+*.dwo
+
+#
+## Python
+################################################################################
+
+# Byte-compiled / optimized
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environments & Packages
+venv/
+.venv/
+env/
+.env
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Testing / Tooling
+.tox/
+.coverage
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+
+#
+## Bash / Shell / General Scripts
+################################################################################
+
+*.log
+*.tmp
+*.bak
+*.swp
+*~
+
+
+#
+## IDEs & OS Noise
+################################################################################
+
+# VS Code (Ignores personal workspace settings, keeps shared team settings)
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# Visual Studio
+.vs/
+*.user
+
+# CLion / JetBrains
+.idea/
+cmake-build-*/
+
+# OS Artifacts
+.DS_Store
+Thumbs.db
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # Prerequisites
 *.d

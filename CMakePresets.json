@@ -1,81 +1,69 @@
 {
   "version": 3,
-  "cmakeMinimumRequired": {
-    "major": 3,
-    "minor": 20,
-    "patch": 0
-  },
   "vendor": {
-    "cm_deps": [
+    "nest_deps": [
       {
         "name": "glm",
         "version": "1.0.3",
-        "sys_first": "FALSE",
+        "sys_first": "OFF",
         "url": "https://github.com/g-truc/glm/archive/refs/tags/1.0.3.zip"
       }
     ]
   },
   "configurePresets": [
     {
-      "name": "base-config",
       "hidden": true,
-      "binaryDir": "${sourceDir}/build/obj",
+      "name": "base-config",
+      "binaryDir": "${sourceDir}/.nest/build"
+    },
+    {
+      "name": "debug",
+      "inherits": "base-config",
       "cacheVariables": {
-        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+        "CMAKE_BUILD_TYPE": "Debug"
       }
     },
     {
-      "name": "dev",
-      "inherits": "base-config",
+      "name": "debug-strict",
+      "inherits": "debug",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug",
-        "CM_ENABLE_ASAN": "OFF",
-        "CM_WARNINGS_AS_ERRORS": "OFF"
+        "NEST_WERRORS": "ON"
       }
     },
     {
-      "name": "dev-strict",
-      "inherits": "base-config",
+      "name": "debug-asan",
+      "inherits": "debug",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug",
-        "CM_ENABLE_ASAN": "OFF",
-        "CM_WARNINGS_AS_ERRORS": "ON"
-      }
-    },
-    {
-      "name": "dev-asan",
-      "inherits": "base-config",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug",
-        "CM_ENABLE_ASAN": "ON",
-        "CM_WARNINGS_AS_ERRORS": "OFF"
+        "NEST_ASAN": "ON"
       }
     },
     {
       "name": "release",
       "inherits": "base-config",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release",
-        "CM_ENABLE_ASAN": "OFF",
-        "CM_WARNINGS_AS_ERRORS": "OFF"
+        "CMAKE_BUILD_TYPE": "Release"
       }
     },
     {
       "name": "release-strict",
       "inherits": "release",
       "cacheVariables": {
-        "CM_WARNINGS_AS_ERRORS": "ON"
+        "NEST_WERRORS": "ON"
       }
     }
   ],
   "buildPresets": [
     {
-      "name": "dev",
-      "configurePreset": "dev"
+      "name": "debug",
+      "configurePreset": "debug"
     },
     {
-      "name": "dev-asan",
-      "configurePreset": "dev-asan"
+      "name": "debug-strict",
+      "configurePreset": "debug-strict"
+    },
+    {
+      "name": "debug-asan",
+      "configurePreset": "debug-asan"
     },
     {
       "name": "release",

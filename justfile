@@ -1,22 +1,28 @@
 
-#! Vars
+#
+## Vars
+################################################################################
 
 root         := justfile_directory()
+
+nest_dir     := root / ".nest"
+build_dir    := nest_dir / "build"
+
+subprojects  := `for d in */; do if [ -f "$d/CMakeLists.txt" ]; then echo "${d%/}"; fi; done`
+
+fresh_flag   := if path_exists(build_dir) == "true" { "" } else { "--fresh" }
+
+parallel     := "24"
+preset       := "debug"
+
 compiler_cpp := `which clang++`
 compiler_c   := `which clang`
+generator    := "Ninja"
 
-subprojects := `for d in */; do if [ -f "$d/CMakeLists.txt" ]; then echo "${d%/}"; fi; done`
 
-build_dir    := root / "build"
-subbuild_dir := build_dir / "obj"
-
-fresh_flag := if path_exists(subbuild_dir) == "true" { "" } else { "--fresh" }
-
-parallel := "24"
-preset := "dev"
-generator := "Ninja"
-
-#! Privates
+#
+## Privates
+################################################################################
 
 [private]
 default:
@@ -34,10 +40,10 @@ default:
 
 [private]
 config:
-    @cmake -E make_directory "{{subbuild_dir}}"
-    cmake --preset {{preset}} -G {{generator}}
+    @cmake -E make_directory "{{build_dir}}"
+    cmake {{fresh_flag}} --preset {{preset}} -G "{{generator}}"
     @echo
-    cmake -E copy_if_different "{{subbuild_dir}}/compile_commands.json" "{{root}}/compile_commands.json"
+    -cmake -E copy_if_different "{{build_dir}}/compile_commands.json" "{{root}}/compile_commands.json"
 
 [private]
 [no-exit-message]
@@ -47,30 +53,38 @@ validate target:
         exit 1; \
     fi
 
-#! Build
+#
+## Build
+################################################################################
 
 # target = all / <project_name>
 build target="all": (validate target) config
-    cmake --build {{subbuild_dir}} -j {{parallel}} --target "{{target}}"
+    cmake --build "{{build_dir}}" -j {{parallel}} --target "{{target}}"
 
 # target = all / <project_name>
 run target *args: (build target)
-    {{build_dir}}/bin/{{target}}/{{target}} {{args}}
+    "{{nest_dir}}/bin/{{target}}/{{target}}" {{args}}
 
 # target = all / <project_name>
-[working-directory("{{subbuild}}")]
-test target *args: (build target)
-    ctest --output-on-failure --parallel 8 -C {{preset}}
+test target="all" *args: (build target)
+    @echo "🧪 Running tests..."
+    cmake -E chdir "{{build_dir}}" \
+        ctest --output-on-failure --parallel 8 -C {{preset}} {{args}}
 
-#! Cleanup
 
-# target = all / src  (wipe 'all' or 'projects only')
+#
+## Cleanup
+################################################################################
+
+# target = all / projects  (wipe 'all' or 'projects only')
 clean target="all":
     just _clean_{{target}}
 
+[private]
 _clean_projects:
-    rm -rf {{subbuild_dir}}/*
+    rm -rf "{{build_dir}}"/*
 
+[private]
 _clean_all:
-    rm -rf {{build_dir}}
-    rm -f {{root}}/compile_commands.json
+    rm -rf "{{nest_dir}}"
+    rm -f "{{root}}/compile_commands.json"
