@@ -1,11 +1,6 @@
-# ccmw
+# NEST
 C++ CMake Wrapper
 
+To build or run, use `just`
 
-- For now just run this to compile the project
-
-```
-./fresh_compile.sh
-```
-
-Output will be in `build/bin/...`
+Output will be in `.nest/bin/...`
