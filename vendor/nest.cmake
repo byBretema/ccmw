@@ -49,36 +49,36 @@ endmacro()
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-function(nest_LOAD_DEPENDENCIES)
-    set(l_PRESETS_FILE "${CMAKE_CURRENT_SOURCE_DIR}/CMakePresets.json")
+# function(nest_LOAD_DEPENDENCIES)
+#     set(l_PRESETS_FILE "${CMAKE_CURRENT_SOURCE_DIR}/CMakePresets.json")
 
-    if(NOT EXISTS "${l_PRESETS_FILE}")
-        message(WARNING "[nest] · No CMakePresets.json found. Skipping dependencies.")
-        return()
-    endif()
+#     if(NOT EXISTS "${l_PRESETS_FILE}")
+#         message(WARNING "[nest] · No CMakePresets.json found. Skipping dependencies.")
+#         return()
+#     endif()
 
-    file(READ "${l_PRESETS_FILE}" l_JSON_STR)
+#     file(READ "${l_PRESETS_FILE}" l_JSON_STR)
 
-    string(JSON l_DEP_COUNT ERROR_VARIABLE l_JSON_ERR LENGTH "${l_JSON_STR}" "vendor" "__nest_deps")
+#     string(JSON l_DEP_COUNT ERROR_VARIABLE l_JSON_ERR LENGTH "${l_JSON_STR}" "vendor" "__nest_deps")
 
-    if(l_JSON_ERR OR l_DEP_COUNT EQUAL 0)
-        message(DEBUG "[nest] · No dependencies found in CMakePresets.json.")
-        return()
-    endif()
+#     if(l_JSON_ERR OR l_DEP_COUNT EQUAL 0)
+#         message(DEBUG "[nest] · No dependencies found in CMakePresets.json.")
+#         return()
+#     endif()
 
-    message(STATUS "[nest] · Parsing dependencies from CMakePresets.json...")
+#     message(STATUS "[nest] · Parsing dependencies from CMakePresets.json...")
 
-    math(EXPR l_LAST_INDEX "${l_DEP_COUNT} - 1")
+#     math(EXPR l_LAST_INDEX "${l_DEP_COUNT} - 1")
 
-    foreach(l_INDEX RANGE ${l_LAST_INDEX})
-        string(JSON l_NAME GET "${l_JSON_STR}" "vendor" "__nest_deps" ${l_INDEX} "name")
-        string(JSON l_VER GET "${l_JSON_STR}" "vendor" "__nest_deps" ${l_INDEX} "version")
-        string(JSON l_SYS GET "${l_JSON_STR}" "vendor" "__nest_deps" ${l_INDEX} "sys_first")
-        string(JSON l_URL GET "${l_JSON_STR}" "vendor" "__nest_deps" ${l_INDEX} "url")
+#     foreach(l_INDEX RANGE ${l_LAST_INDEX})
+#         string(JSON l_NAME GET "${l_JSON_STR}" "vendor" "__nest_deps" ${l_INDEX} "name")
+#         string(JSON l_VER GET "${l_JSON_STR}" "vendor" "__nest_deps" ${l_INDEX} "version")
+#         string(JSON l_SYS GET "${l_JSON_STR}" "vendor" "__nest_deps" ${l_INDEX} "sys_first")
+#         string(JSON l_URL GET "${l_JSON_STR}" "vendor" "__nest_deps" ${l_INDEX} "url")
 
-        nest_ADD_DEP("${l_NAME}" "${l_VER}" "${l_URL}" "${l_SYS}")
-    endforeach()
-endfunction()
+#         nest_ADD_DEP("${l_NAME}" "${l_VER}" "${l_URL}" "${l_SYS}")
+#     endforeach()
+# endfunction()
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -342,3 +342,51 @@ macro(_m_nest_APPLY_STANDARD_PROPS target_name)
 endmacro()
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
+#
+## SCRIPT MODE - Functions
+################################################################################
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+function(s_nest_SCAFFOLD target_name target_type)
+    # Find the repository root (one level up from the .nest folder)
+    get_filename_component(l_ROOT "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
+    set(l_TARGET_DIR "${l_ROOT}/${target_name}")
+
+    if(EXISTS "${l_TARGET_DIR}")
+        message(FATAL_ERROR "🔴 Directory '${target_name}' already exists.")
+    endif()
+
+    file(MAKE_DIRECTORY "${l_TARGET_DIR}")
+
+    if(target_type STREQUAL "EXE")
+        file(WRITE "${l_TARGET_DIR}/CMakeLists.txt" "nest_SETUP_EXE()\n")
+        file(WRITE "${l_TARGET_DIR}/main.cpp"
+"#include <iostream>\n\nint main() {\n    std::cout << \"Hello from ${target_name}!\\n\";\n    return 0;\n}\n")
+        message(STATUS "✅ Created executable project '${target_name}'")
+    else()
+        file(WRITE "${l_TARGET_DIR}/CMakeLists.txt" "nest_SETUP_LIB(${target_type})\n")
+        file(WRITE "${l_TARGET_DIR}/${target_name}.hpp"
+"#pragma once\n\nvoid hello_${target_name}();\n")
+        file(WRITE "${l_TARGET_DIR}/${target_name}.cpp"
+"#include \"${target_name}.hpp\"\n#include <iostream>\n\nvoid hello_${target_name}() {\n    std::cout << \"Hello from the ${target_name} library!\\n\";\n}\n")
+        message(STATUS "✅ Created ${target_type} library project '${target_name}'")
+    endif()
+endfunction()
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
+#
+## SCRIPT MODE - Entry Point
+################################################################################
+
+if(CMAKE_SCRIPT_MODE_FILE)
+
+    if(NEST_DO_SCAFFOLD)
+        s_nest_SCAFFOLD("${TARGET_NAME}" "${TARGET_TYPE}")
+    endif()
+
+endif()

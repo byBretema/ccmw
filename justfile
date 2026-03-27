@@ -54,6 +54,19 @@ validate target:
     fi
 
 #
+## Manage
+################################################################################
+
+# Scaffolds a new executable project
+addbin name:
+    @cmake -DNEST_DO_SCAFFOLD=ON -DTARGET_NAME="{{name}}" -DTARGET_TYPE="EXE" -P vendor/nest.cmake
+
+# Scaffolds a new library project (Defaults to SHARED if type is omitted)
+addlib name type="SHARED":
+    @cmake -DNEST_DO_SCAFFOLD=ON -DTARGET_NAME="{{name}}" -DTARGET_TYPE="{{type}}" -P vendor/nest.cmake
+
+
+#
 ## Build
 ################################################################################
 
