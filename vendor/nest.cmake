@@ -202,10 +202,11 @@ endfunction()
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-function(nest_LINK_INTERNAL proj_name)
+function(nest_LINK_INTERNAL)
     if(ARGN)
-        message(STATUS "[nest] · Internal : ${proj_name} linking to [${ARGN}]")
-        target_link_libraries(${proj_name} PRIVATE ${ARGN})
+        message(STATUS "[nest] · Internal : ${PROJECT_NAME} linking to [${ARGN}]")
+        target_link_libraries(${PROJECT_NAME} PRIVATE ${ARGN})
+        target_include_directories(${PROJECT_NAME} PUBLIC ${ARGN})
     endif()
 endfunction()
 
