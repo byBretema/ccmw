@@ -5,7 +5,7 @@
 
 include(FetchContent)
 
-set(FETCHCONTENT_BASE_DIR "${CMAKE_SOURCE_DIR}/.nest/deps")
+set(FETCHCONTENT_BASE_DIR "${CMAKE_SOURCE_DIR}/.nest/vendor")
 
 # Gets track of all external dependencies added via nest_ADD_DEP, to link them easily later
 set(__nest_DEPS "" CACHE INTERNAL "Global external dependencies list")

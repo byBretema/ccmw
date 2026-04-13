@@ -1,5 +1,8 @@
 #define yyEnable_Aliases
+#define yyLib_Glm
 #include "../vendor/y.hpp"
+
+// #include <glm/glm.hpp>
 
 int main(i32 argc, char **argv) {
     Vec<StrView> args(argv + 1, argv + argc);
@@ -10,6 +13,6 @@ int main(i32 argc, char **argv) {
     }
 
     StrView const text = args[0];
-    y_info("{}", text);
+    y_info("{} : {}", text, glm::vec3{1, 2, 3});
 
 }
