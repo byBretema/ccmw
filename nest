@@ -1,0 +1,246 @@
+#!/usr/bin/env python3
+"""
+NEST CMake Wrapper - Python CLI equivalent to justfile
+"""
+
+import argparse
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+
+ROOT = Path.cwd()
+NEST_DIR = ROOT / ".nest"
+BUILD_DIR = NEST_DIR / "build"
+PARALLEL = 24
+PRESET = "debug"
+GENERATOR = "Ninja"
+
+
+def get_projects():
+    """Get list of projects (directories with CMakeLists.txt)."""
+    projects = []
+    for d in os.listdir(ROOT):
+        path = ROOT / d
+        if path.is_dir() and (path / "CMakeLists.txt").exists():
+            projects.append(d)
+    return sorted(projects)
+
+
+def get_presets():
+    """Get list of CMake presets."""
+    try:
+        result = subprocess.run(
+            ["cmake", "--list-presets"],
+            capture_output=True,
+            text=True,
+            check=False
+        )
+        presets = []
+        for line in result.stdout.splitlines():
+            line = line.strip()
+            if line.startswith('"') and line.endswith('"'):
+                presets.append(line.strip('"'))
+        return presets
+    except Exception:
+        return []
+
+
+def get_fresh_flag():
+    """Return --fresh if build dir doesn't exist."""
+    return "" if BUILD_DIR.exists() else "--fresh"
+
+
+def default_cmd(args):
+    """Show available projects and presets."""
+    projects = get_projects()
+    presets = get_presets()
+
+    print()
+    print("Available projects:")
+    for p in projects:
+        print(f"    {p}")
+    print()
+    print("Available presets:")
+    for p in presets:
+        print(f"    {p}")
+    print()
+    print("Usage: nest <command> [args]")
+    print("Commands: config, build, run, test, clean, add-exe, add-lib")
+
+
+def config_cmd(args):
+    """Configure CMake."""
+    BUILD_DIR.mkdir(parents=True, exist_ok=True)
+
+    fresh_flag = get_fresh_flag()
+    cmd = ["cmake", fresh_flag, "--preset", PRESET, "-G", GENERATOR]
+    print(f"Running: {' '.join(cmd)}")
+    subprocess.run(cmd, cwd=ROOT)
+
+    print()
+    src = BUILD_DIR / "compile_commands.json"
+    dst = ROOT / "compile_commands.json"
+    if src.exists():
+        shutil.copy2(src, dst)
+
+
+def validate_target(target):
+    """Validate target doesn't contain spaces."""
+    if " " in target:
+        print(f"🔴 Target '{target}' contains spaces, cannot be built.")
+        sys.exit(1)
+
+
+def build_cmd(args):
+    """Build target."""
+    target = args.target if args.target else "all"
+    validate_target(target)
+
+    config_cmd(args)
+
+    cmd = ["cmake", "--build", str(BUILD_DIR), "-j", str(PARALLEL), "--target", target]
+    print(f"Running: {' '.join(cmd)}")
+    subprocess.run(cmd)
+
+
+def run_cmd(args):
+    """Run target."""
+    target = args.target
+    validate_target(target)
+
+    build_cmd(argparse.Namespace(target=target))
+
+    print()
+    exe_path = NEST_DIR / "bin" / target / target
+    if exe_path.exists():
+        cmd = [str(exe_path)] + args.args
+        subprocess.run(cmd)
+    else:
+        print(f"🔴 Executable not found: {exe_path}")
+
+
+def test_cmd(args):
+    """Run tests."""
+    target = args.target if args.target else "all"
+
+    build_cmd(argparse.Namespace(target=target))
+
+    print("🧪 Running tests...")
+    cmd = ["cmake", "-E", "chdir", str(BUILD_DIR),
+           "ctest", "--output-on-failure", "-parallel", "8", "-C", PRESET]
+    if target != "all":
+        cmd.extend(["-R", target])
+    subprocess.run(cmd)
+
+
+def clean_cmd(args):
+    """Clean build artifacts."""
+    target = args.target if args.target else "all"
+
+    if target == "all":
+        if NEST_DIR.exists():
+            shutil.rmtree(NEST_DIR)
+        compile_commands = ROOT / "compile_commands.json"
+        if compile_commands.exists():
+            compile_commands.unlink()
+    else:
+        if BUILD_DIR.exists():
+            for item in BUILD_DIR.iterdir():
+                if item.is_dir():
+                    shutil.rmtree(item)
+                else:
+                    item.unlink()
+
+
+def add_exe_cmd(args):
+    """Scaffold a new executable."""
+    name = args.name
+    cmd = [
+        "cmake",
+        "-DNEST_DO_SCAFFOLD=ON",
+        f"-DTARGET_NAME={name}",
+        "-DTARGET_TYPE=EXE",
+        "-P", str(ROOT / "vendor" / "nest.cmake")
+    ]
+    subprocess.run(cmd)
+
+
+def add_lib_cmd(args):
+    """Scaffold a new library."""
+    name = args.name
+    lib_type = args.type if args.type else "SHARED"
+    cmd = [
+        "cmake",
+        "-DNEST_DO_SCAFFOLD=ON",
+        f"-DTARGET_NAME={name}",
+        f"-DTARGET_TYPE={lib_type}",
+        "-P", str(ROOT / "vendor" / "nest.cmake")
+    ]
+    subprocess.run(cmd)
+
+
+def main():
+    parser = argparse.ArgumentParser(prog="nest", description="NEST CMake Wrapper CLI")
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+
+    # Default command (show projects/presets)
+    subparsers.add_parser("default", help="Show available projects and presets")
+
+    # config
+    subparsers.add_parser("config", help="Configure CMake")
+
+    # build
+    build_parser = subparsers.add_parser("build", help="Build targets")
+    build_parser.add_argument("target", nargs="?", default="all", help="Target to build")
+
+    # run
+    run_parser = subparsers.add_parser("run", help="Run executable")
+    run_parser.add_argument("target", help="Target to run")
+    run_parser.add_argument("args", nargs="*", help="Arguments to pass")
+
+    # test
+    test_parser = subparsers.add_parser("test", help="Run tests")
+    test_parser.add_argument("target", nargs="?", default="all", help="Test to run")
+
+    # clean
+    clean_parser = subparsers.add_parser("clean", help="Clean build artifacts")
+    clean_parser.add_argument("target", nargs="?", default="all", help="What to clean (all/projects)")
+
+    # add-exe
+    add_exe_parser = subparsers.add_parser("add-exe", help="Scaffold new executable")
+    add_exe_parser.add_argument("name", help="Name of executable")
+
+    # add-lib
+    add_lib_parser = subparsers.add_parser("add-lib", help="Scaffold new library")
+    add_lib_parser.add_argument("name", help="Name of library")
+    add_lib_parser.add_argument("type", nargs="?", default="SHARED", help="Library type (SHARED/STATIC)")
+
+    args = parser.parse_args()
+
+    if args.command is None:
+        default_cmd(args)
+        return
+
+    if args.command == "default":
+        default_cmd(args)
+    elif args.command == "config":
+        config_cmd(args)
+    elif args.command == "build":
+        build_cmd(args)
+    elif args.command == "run":
+        run_cmd(args)
+    elif args.command == "test":
+        test_cmd(args)
+    elif args.command == "clean":
+        clean_cmd(args)
+    elif args.command == "add-exe":
+        add_exe_cmd(args)
+    elif args.command == "add-lib":
+        add_lib_cmd(args)
+
+
+if __name__ == "__main__":
+    main()
