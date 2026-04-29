@@ -50,7 +50,7 @@ def get_presets():
 
 def get_fresh_flag():
     """Return --fresh if build dir doesn't exist."""
-    return "" if BUILD_DIR.exists() else "--fresh"
+    return "--fresh" if not BUILD_DIR.exists() else ""
 
 
 def default_cmd(args):
@@ -75,8 +75,10 @@ def config_cmd(args):
     """Configure CMake."""
     BUILD_DIR.mkdir(parents=True, exist_ok=True)
 
-    fresh_flag = get_fresh_flag()
-    cmd = ["cmake", fresh_flag, "--preset", PRESET, "-G", GENERATOR]
+    if not BUILD_DIR.exists():
+        cmd = ["cmake", "--fresh", "--preset", PRESET, "-G", GENERATOR]
+    else:
+        cmd = ["cmake", "--preset", PRESET, "-G", GENERATOR]
     print(f"Running: {' '.join(cmd)}")
     subprocess.run(cmd, cwd=ROOT)
 
