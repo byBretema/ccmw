@@ -49,14 +49,25 @@ endmacro()
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
+macro(nest_VERSION major minor patch)
+    set(NEST_VERSION "${major}.${minor}.${patch}")
+endmacro()
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 function(nest_DETECT_PROJECTS)
     set(l_FOUND_DIRS "")
     set(l_ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
+    set(l_PROJECTS_DIR "${l_ROOT_DIR}/projects")
 
-    file(GLOB l_ROOT_CONTENT LIST_DIRECTORIES TRUE RELATIVE "${l_ROOT_DIR}" "${l_ROOT_DIR}/*")
+    if(NOT EXISTS "${l_PROJECTS_DIR}")
+        return()
+    endif()
+
+    file(GLOB l_ROOT_CONTENT LIST_DIRECTORIES TRUE RELATIVE "${l_PROJECTS_DIR}" "${l_PROJECTS_DIR}/*")
 
     foreach(l_ITEM ${l_ROOT_CONTENT})
-        set(l_ITEM_DIR "${l_ROOT_DIR}/${l_ITEM}")
+        set(l_ITEM_DIR "${l_PROJECTS_DIR}/${l_ITEM}")
         _nest_HAS_CMAKEFILE("${l_ITEM_DIR}" l_HAS_CMAKEFILE)
 
         if(${l_HAS_CMAKEFILE})
@@ -68,7 +79,7 @@ function(nest_DETECT_PROJECTS)
     endforeach()
 
     foreach(l_DIR ${l_FOUND_DIRS})
-        add_subdirectory("${l_DIR}")
+        add_subdirectory("projects/${l_DIR}")
         message("")
     endforeach()
 endfunction()
@@ -78,7 +89,6 @@ endfunction()
 function(nest_ENABLE_TESTS)
     message(STATUS "[nest] · Enabling tests")
 
-    enable_testing()
     _nest_GLOB("${CMAKE_SOURCE_DIR}/tests" _sources _headers)
 
     foreach(_source IN LISTS _sources)
@@ -89,6 +99,13 @@ function(nest_ENABLE_TESTS)
         _nest_SET_OUTPUT_DIR(${_name} "tests")
         _nest_ENABLE_STRICT_MODE(${_name})
         _nest_LINK_DEPS(${_name})
+
+        target_include_directories(${_name} PRIVATE "${CMAKE_SOURCE_DIR}/vendor")
+
+        # Tests output directly to .nest/tests/ without version/build-type subfolders
+        set_target_properties(${_name} PROPERTIES
+            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/../tests"
+        )
 
         add_test(NAME "${_name}" COMMAND "${_name}")
 
@@ -241,7 +258,11 @@ endfunction()
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 function(_nest_SET_OUTPUT_DIR proj_name dir_name)
-    set(l_OUTPUT_DIR "${CMAKE_BINARY_DIR}/../${dir_name}")
+    if(NOT NEST_VERSION)
+        set(NEST_VERSION "0.0.0")
+    endif()
+    string(TOLOWER "${CMAKE_BUILD_TYPE}" l_BUILD_TYPE_LOWER)
+    set(l_OUTPUT_DIR "${CMAKE_BINARY_DIR}/../${dir_name}/v${NEST_VERSION}/${l_BUILD_TYPE_LOWER}")
     message(DEBUG "[nest] · OutputDir -> ${l_OUTPUT_DIR}")
 
     set_target_properties(${proj_name} PROPERTIES
@@ -310,7 +331,10 @@ macro(_m_nest_APPLY_STANDARD_PROPS target_name)
         EXPORT_COMPILE_COMMANDS ON
     )
 
-    target_include_directories(${target_name} PUBLIC ${PROJECT_SOURCE_DIR})
+    target_include_directories(${target_name} PUBLIC
+        ${PROJECT_SOURCE_DIR}
+        ${CMAKE_SOURCE_DIR}/vendor
+    )
     _nest_ENABLE_STRICT_MODE(${target_name})
 
     if(l_DO_LINK)
@@ -330,7 +354,7 @@ endmacro()
 function(s_nest_SCAFFOLD target_name target_type)
     # Find the repository root (one level up from the .nest folder)
     get_filename_component(l_ROOT "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
-    set(l_TARGET_DIR "${l_ROOT}/${target_name}")
+    set(l_TARGET_DIR "${l_ROOT}/projects/${target_name}")
 
     if(EXISTS "${l_TARGET_DIR}")
         message(FATAL_ERROR "🔴 Directory '${target_name}' already exists.")

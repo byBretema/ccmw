@@ -11,7 +11,7 @@
 
     yyLib_
 
-        // #define yyLib_Fmt
+        // #define yyLib_Fmt (no longer needed — fmt is always used)
         //     Include basic fmt header file(s) and expose, basic log methods:
         //     y_info/warn/err/debug. This will undefine 'yyCustom_Fmt'
 
@@ -27,7 +27,7 @@
 
         // #define yyCustom_Fmt
         //     Include simplistic fmt-like custom implementation.
-        //     It could be undefined by 'yyLib_Fmt'
+        //     It could be undefined by 'yyLib_Fmt' (obsolete — fmt is always used)
 
 --------------------------------------------------------------------------------
 
@@ -88,6 +88,7 @@ y_info/warn...
 #include <chrono>
 #include <cmath>
 #include <concepts>
+#include <cstdio>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -113,15 +114,10 @@ y_info/warn...
 #endif
 
 // fmt
-// #ifdef yyLib_Fmt
-// #include <fmt/chrono.h>
-// #include <fmt/format.h>
-// #include <fmt/ranges.h>
-// #include <fmt/std.h>
-// #else
-// #include <format>
-// #endif
-#include <format>
+#include <fmt/chrono.h>
+#include <fmt/format.h>
+#include <fmt/ranges.h>
+#include <fmt/std.h>
 
 // glm
 #ifdef yyLib_Glm
@@ -417,49 +413,25 @@ concept T_MathVec = T_OneOf<T, Vec2, Vec3, Vec4>;
 
 
 // - - - - - - - - - - - - - - - - FORMATTERs - - - - - - - - - - - - - - - - //
-#if 1
-
-// Containers formatter
-template <y::T_Container T>
-struct std::formatter<T> {
-    constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
-    auto format(const T &container, std::format_context &ctx) const {
-        auto out = ctx.out();
-
-        std::format_to(out, "{{ ");
-
-        bool first = true;
-        for (const auto &item : container) {
-            if (!first)
-                std::format_to(out, ", ");
-            std::format_to(out, "{}", item);
-            first = false;
-        }
-
-        return std::format_to(out, " }}");
-    }
-};
-
 
 #ifdef yyLib_Glm
 
 // Math Vectors formatter
 template <y::T_MathVec T>
-struct std::formatter<T> {
-    constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
-    auto format(const T &v, std::format_context &ctx) const {
+struct fmt::formatter<T> {
+    constexpr auto parse(fmt::format_parse_context &ctx) { return ctx.begin(); }
+    auto format(const T &v, fmt::format_context &ctx) const {
         int const f = 2; // Amount of decimals  // TODO : Set this as setting field
         if constexpr (std::is_same_v<T, y::Vec2>)
-            return std::format_to(ctx.out(), "Vec2({:.{}f}, {:.{}f})", v.x, f, v.y, f);
+            return fmt::format_to(ctx.out(), "Vec2({:.{}f}, {:.{}f})", v.x, f, v.y, f);
         if constexpr (std::is_same_v<T, y::Vec3>)
-            return std::format_to(ctx.out(), "Vec3({:.{}f}, {:.{}f}, {:.{}f})", v.x, f, v.y, f, v.z, f);
+            return fmt::format_to(ctx.out(), "Vec3({:.{}f}, {:.{}f}, {:.{}f})", v.x, f, v.y, f, v.z, f);
         if constexpr (std::is_same_v<T, y::Vec4>)
-            return std::format_to(ctx.out(), "Vec4({:.{}f}, {:.{}f}, {:.{}f})", v.x, f, v.y, f, v.z, f, v.w, f);
-        return std::format_to(ctx.out(), "Vec?()");
+            return fmt::format_to(ctx.out(), "Vec4({:.{}f}, {:.{}f}, {:.{}f}, {:.{}f})", v.x, f, v.y, f, v.z, f, v.w, f);
+        return fmt::format_to(ctx.out(), "Vec?()");
     }
 };
 
-#endif
 #endif
 
 
@@ -474,8 +446,8 @@ static const int __yWinCoutSetup = []() {
 }();
 #endif
 
-#define y_fmt std::format
-#define __yPrinter(...) printf("%s", y_fmt(__VA_ARGS__).c_str())
+#define y_fmt fmt::format
+#define __yPrinter(...) fmt::print(__VA_ARGS__)
 
 #ifndef yyDisable_LogFileAndLine
 #define __yLogInfo(level) y_fmt("[{}] | {}:{} | ", level, __FILE__, __LINE__)
@@ -922,7 +894,7 @@ inline b8 file_check_extension(Str const &input_file, Str ext_ref) {
 
 template <T_Number T>
 [[nodiscard]] constexpr inline T clamp(T v, T lo, T hi) {
-    assert(lo >= hi);
+    assert(lo <= hi);
     return std::max(lo, std::min(v, hi));
 }
 
@@ -938,7 +910,7 @@ template <T_Decimal T>
 
 template <T_Decimal T>
 [[nodiscard]] constexpr inline b8 fuzzy_eq(T f1, T f2, T threshold = 0.01f) {
-    auto const diff = abs(f1 - f2);
+    auto const diff = std::abs(f1 - f2);
     auto const is_eq = diff <= threshold;
     return is_eq;
 }

@@ -1,6 +1,6 @@
 #define yyEnable_Aliases
 #define yyLib_Glm
-#include "../vendor/y.hpp"
+#include "y.hpp"
 
 // #include <glm/glm.hpp>
 
