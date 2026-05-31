@@ -986,22 +986,19 @@ public:
     }
 
     void show_results() {
-        bool const done = m_pass_count == m_total_count;
-        // y_println("");
-
-        if (m_pass_count and not done)
-            y_println("✅ PASS  |  {} / {}", m_pass_count, m_total_count);
+        for (auto const &f : m_failures) {
+            Str const msg_l = y_fmt("[FAIL] {} -> {}", f.section, f.title);
+            usize const pad = m_max_msg_len > msg_l.size() ? m_max_msg_len - msg_l.size() : 0ul;
+            y_println("{}{}  |  {}", msg_l, Str(pad, ' '), f.msg);
+        }
 
         if (m_fail_count)
-            y_println("❌ FAIL  |  {} / {}", m_fail_count, m_total_count);
-
-        // if (done)
-        //     y_println("🏁 DONE  |  {} / {}", m_pass_count, m_total_count);
+            y_println("[FAIL]  |  {} / {}", m_fail_count, m_total_count);
+        else
+            y_println("[PASS]  |  {} / {}", m_pass_count, m_total_count);
     }
 
-    i32 cli_result() { return m_pass_count == m_total_count ? 0 : -1; }
-
-    void set_align_column(usize col) { m_align_col = std::clamp(col, 0ul, 255ul); }
+    i32 cli_result() { return m_pass_count == m_total_count ? 0 : 1; }
 
     void test(StrView title, Fn<bool()> const &fn, StrView msg = "") {
         if (!fn) {
@@ -1019,15 +1016,21 @@ public:
 
 
 private:
+    struct Failure {
+        Str section;
+        Str title;
+        Str msg;
+    };
+
     void on_start() { ++m_total_count; }
 
     void on_passed() { ++m_pass_count; }
 
     void on_failed(StrView title, StrView msg) {
-        Str const msg_l = y_fmt("⭕️ {} -> {}", m_section, title);
-        usize const sep_len = m_align_col > msg_l.size() ? m_align_col - msg_l.size() : 0ul;
-        Str const sep = Str(sep_len, ' ');
-        y_println("{}{}  |  {}", msg_l, sep, msg);
+        Str const msg_l = y_fmt("[FAIL] {} -> {}", m_section, title);
+        if (msg_l.size() > m_max_msg_len)
+            m_max_msg_len = msg_l.size();
+        m_failures.push_back({Str(m_section), Str(title), Str(msg)});
         ++m_fail_count;
     }
 
@@ -1035,7 +1038,8 @@ private:
     u32 m_total_count = 0;
     u32 m_pass_count = 0;
     u32 m_fail_count = 0;
-    usize m_align_col = 0;
+    usize m_max_msg_len = 0;
+    Vec<Failure> m_failures;
 };
 
 #endif

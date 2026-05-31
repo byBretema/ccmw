@@ -9,6 +9,7 @@ nest_dir := root / ".nest"
 build_dir := nest_dir / "build"
 
 projects := `for d in projects/*/; do if [ -f "$d/CMakeLists.txt" ]; then basename "$d"; fi; done`
+tests   := `for f in tests/*.cpp; do f=$(basename "$f" .cpp); f=$(basename "$f" .hpp); echo "$f"; done`
 presets := `cmake --list-presets 2>/dev/null | awk -F'"' '/^[[:space:]]+"/ {print $2}'`
 
 fresh_flag := if path_exists(build_dir) == "true" { "" } else { "--fresh" }
@@ -28,6 +29,9 @@ default:
     @echo "Available projects:"
     @echo "{{ projects }}" | while read -r p; do if [ -n "$p" ]; then echo "    $p"; fi; done
     @echo
+    @echo "Available tests:"
+    @echo "{{ tests }}" | while read -r t; do if [ -n "$t" ]; then echo "    $t"; fi; done
+    @echo
     @echo "Available presets:"
     @echo "{{ presets }}"  | while read -r p; do if [ -n "$p" ]; then echo "    $p"; fi; done
     @echo
@@ -36,9 +40,9 @@ default:
 [private]
 config:
     @cmake -E make_directory "{{ build_dir }}"
-    cmake {{ fresh_flag }} --preset {{ preset }} -G "{{ generator }}"
+    cmake --preset {{ preset }} -G "{{ generator }}" {{ fresh_flag }}
     @echo
-    -cmake -E copy_if_different "{{ build_dir }}/compile_commands.json" "{{ root }}/compile_commands.json"
+    @cmake -E copy_if_different "{{ build_dir }}/compile_commands.json" "{{ root }}/compile_commands.json"
 
 [no-exit-message]
 [private]
@@ -74,11 +78,15 @@ run target *args: (build target)
     @echo
     @"{{ root }}/cmake/nest-run.sh" "{{ target }}" "{{ preset }}" {{ args }}
 
-# target = all / <project_name>
-test target="all" *args: (build target)
+# tests = all / test_name(s) — space-separated runs multiple, empty runs all
+test *tests: build
+    @echo
     @echo "🧪 Running tests..."
-    cmake -E chdir "{{ build_dir }}" \
-        ctest --output-on-failure --parallel 8 -C {{ preset }} {{ args }} | grep -v "^    Start"
+    @r=""; [ -n "{{ tests }}" ] && r="^($(echo {{ tests }} | tr ' ' '|'))$"; \
+    ctest --test-dir "{{ build_dir }}" \
+        --output-on-failure --parallel 8 -C {{ preset }} \
+        $( [ -n "$r" ] && echo "-R" "$r" ) \
+        | grep -v "^    Start"
 
 #
 ## Cleanup

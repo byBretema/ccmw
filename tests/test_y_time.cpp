@@ -6,7 +6,6 @@
 
 int main() {
     y::Test t;
-    t.set_align_column(55);
 
     y::ETimer timer;
     timer.reset();

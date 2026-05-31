@@ -5,7 +5,6 @@
 
 int main() {
     y::Test t;
-    t.set_align_column(55);
 
     t.eq("str_lower",    y::str_lower("HELLO"),            "hello");
     t.eq("str_upper",    y::str_upper("hello"),            "HELLO");

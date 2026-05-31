@@ -38,11 +38,11 @@ macro(nest_INIT cxx_standard)
 
     find_program(CCACHE_PROGRAM ccache)
     if(CCACHE_PROGRAM)
-        message(STATUS "[nest] · Build Cache : ccache enabled")
+        message(STATUS "[nest] · Build Cache: ccache enabled")
         set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
         set(CMAKE_C_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
     else()
-        message(STATUS "[nest] · Build Cache : ccache not found")
+        message(STATUS "[nest] · Build Cache: ccache not found")
     endif()
     message("")
 endmacro()
@@ -80,7 +80,7 @@ function(nest_DETECT_PROJECTS)
 
     foreach(l_DIR ${l_FOUND_DIRS})
         add_subdirectory("projects/${l_DIR}")
-        message("")
+        # message("")
     endforeach()
 endfunction()
 
@@ -102,14 +102,12 @@ function(nest_ENABLE_TESTS)
 
         target_include_directories(${_name} PRIVATE "${CMAKE_SOURCE_DIR}/vendor")
 
-        # Tests output directly to .nest/tests/ without version/build-type subfolders
-        set_target_properties(${_name} PROPERTIES
-            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/../tests"
-        )
+        # Tests output directly to .nest/tests, no subfolders
+        set_target_properties(${_name} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/../tests")
 
         add_test(NAME "${_name}" COMMAND "${_name}")
 
-        message(STATUS "[nest] · Test     : ${_name} -- ${_source}")
+        message(STATUS "[nest] · Test: ${_name} -- ${_source}")
     endforeach()
 
     message("")
@@ -123,14 +121,13 @@ function(nest_ADD_DEP lib_name lib_version lib_url sys_first)
     endif()
 
     if(NOT ${lib_name}_FOUND)
-        message(STATUS "[nest] · External : ${lib_name}")
+        message(STATUS "[nest] · External: ${lib_name}")
         FetchContent_Declare(${lib_name} DOWNLOAD_EXTRACT_TIMESTAMP OFF URL ${lib_url})
         FetchContent_MakeAvailable(${lib_name})
     else()
-        message(STATUS "[nest] · System   : ${lib_name}")
+        message(STATUS "[nest] · System: ${lib_name}")
     endif()
 
-    # Safely append to the global list using native CMake lists
     set(l_TMP ${__nest_DEPS})
     list(APPEND l_TMP ${lib_name})
     list(REMOVE_DUPLICATES l_TMP)
@@ -198,7 +195,8 @@ endmacro()
 
 function(nest_LINK_INTERNAL)
     if(ARGN)
-        message(STATUS "[nest] · Internal : Linking '${PROJECT_NAME}' to [${ARGN}]")
+        message(STATUS "[nest] · ···· Linking to: ${ARGN}")
+        # message(STATUS "[nest] · ···· Linking '${PROJECT_NAME}' to [${ARGN}]")
         target_link_libraries(${PROJECT_NAME} PRIVATE ${ARGN})
     endif()
 endfunction()
@@ -287,7 +285,7 @@ endfunction()
 
 function(_nest_ADD_EXE proj_name proj_root_dir)
     _nest_GLOB(${proj_root_dir} l_SOURCES l_HEADERS)
-    message(STATUS "[nest] · Project  : ${proj_name}")
+    message(STATUS "[nest] · Project: ${proj_name}")
     add_executable(${proj_name} ${l_SOURCES} ${l_HEADERS})
 endfunction()
 
@@ -295,7 +293,7 @@ endfunction()
 
 function(_nest_ADD_LIB proj_name proj_root_dir lib_type)
     _nest_GLOB(${proj_root_dir} l_SOURCES l_HEADERS)
-    message(STATUS "[nest] · Library  : ${proj_name} (${lib_type})")
+    message(STATUS "[nest] · Library: ${proj_name} (${lib_type})")
     add_library(${proj_name} ${lib_type} ${l_SOURCES} ${l_HEADERS})
 endfunction()
 

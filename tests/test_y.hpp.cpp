@@ -6,7 +6,6 @@
 
 int main() {
     y::Test t;
-    t.set_align_column(50);
 
     // y_fmt basic types
     t.eq("y_fmt int",   y_fmt("{}", 42),    "42");
