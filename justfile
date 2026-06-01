@@ -99,8 +99,10 @@ clean target="all":
 [private]
 _clean_projects:
     @rm -rf "{{ build_dir }}"/*
+    @rm -rf "{{ root }}/.cache"
 
 [private]
 _clean_all:
     @rm -rf "{{ nest_dir }}"
     @rm -f "{{ root }}/compile_commands.json"
+    @rm -rf "{{ root }}/.cache"
