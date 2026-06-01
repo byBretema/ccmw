@@ -1,5 +1,7 @@
 
 #
+set shell := ["bash", "-c"]
+
 ## Vars
 ################################################################################
 
@@ -9,12 +11,12 @@ nest_dir := root / ".nest"
 build_dir := nest_dir / "build"
 
 projects := `for d in projects/*/; do if [ -f "$d/CMakeLists.txt" ]; then basename "$d"; fi; done`
-tests   := `for f in tests/*.cpp; do f=$(basename "$f" .cpp); f=$(basename "$f" .hpp); echo "$f"; done`
+tests := `for f in tests/*.cpp; do f=$(basename "$f" .cpp); echo "$f"; done`
 presets := `cmake --list-presets 2>/dev/null | awk -F'"' '/^[[:space:]]+"/ {print $2}'`
 
 fresh_flag := if path_exists(build_dir) == "true" { "" } else { "--fresh" }
 
-parallel := "24"
+parallel := `nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4`
 preset := "debug"
 
 generator := "Ninja"
@@ -44,14 +46,6 @@ config:
     @echo
     @cmake -E copy_if_different "{{ build_dir }}/compile_commands.json" "{{ root }}/compile_commands.json"
 
-[no-exit-message]
-[private]
-validate target:
-    @if echo "{{ target }}" | grep -q " "; then \
-        echo "🔴 Target '{{ target }}' contains spaces, cannot be built."; \
-        exit 1; \
-    fi
-
 #
 ## Manage
 ################################################################################
@@ -68,20 +62,26 @@ add_lib name type="SHARED":
 ## Build
 ################################################################################
 
-# target = all / <project_name>
+# targets = all / <project_name> ...
 [no-exit-message]
-build target="all": (validate target) config
-    cmake --build "{{ build_dir }}" -j {{ parallel }} --target "{{ target }}"
+build *targets: config
+    @if [ -z "{{ targets }}" -o "{{ targets }}" = "all" ]; then \
+        cmake --build "{{ build_dir }}" -j {{ parallel }}; \
+    else \
+        cmake --build "{{ build_dir }}" -j {{ parallel }} --target {{ targets }}; \
+    fi
 
 # target = all / <project_name>
+[no-exit-message]
 run target *args: (build target)
     @echo
     @"{{ root }}/cmake/nest-run.sh" "{{ target }}" "{{ preset }}" {{ args }}
 
 # tests = all / test_name(s) — space-separated runs multiple, empty runs all
-test *tests: build
+test *tests:
     @echo
-    @echo "🧪 Running tests..."
+    @echo "🧪 Building & running tests..."
+    @just build "{{ tests }}"
     @r=""; [ -n "{{ tests }}" ] && r="^($(echo {{ tests }} | tr ' ' '|'))$"; \
     ctest --test-dir "{{ build_dir }}" \
         --output-on-failure --parallel 8 -C {{ preset }} \

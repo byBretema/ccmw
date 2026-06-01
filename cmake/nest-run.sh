@@ -24,7 +24,7 @@ elif [ ${#versions[@]} -eq 1 ]; then
     v="${versions[0]}"
 else
     if command -v fzf &>/dev/null; then
-        height=$(( ($(tput lines) < 20) ? $(tput lines) : 20 ))
+        height=$((($(tput lines) < 20) ? $(tput lines) : 20))
         v=$(printf "%s\n" "${versions[@]}" | fzf -1 --prompt="Choose project version > " --layout=reverse --cycle --info=inline-right --height "$height")
     else
         PS3=">> "
@@ -38,4 +38,30 @@ else
     fi
 fi
 
-exec "$bindir/$v/${preset}/${target}" "$@"
+config_dirs=()
+for e in "$bindir/$v"/*/; do
+    [ -d "$e" ] && config_dirs+=("$(basename "$e")")
+done
+
+if [ ${#config_dirs[@]} -eq 0 ]; then
+    echo "No configuration found for ${target}"
+    exit 1
+elif [ ${#config_dirs[@]} -eq 1 ]; then
+    build_type="${config_dirs[0]}"
+else
+    if command -v fzf &>/dev/null; then
+        height=$((($(tput lines) < 20) ? $(tput lines) : 20))
+        build_type=$(printf "%s\n" "${config_dirs[@]}" | fzf -1 --prompt="Choose configuration > " --layout=reverse --cycle --info=inline-right --height "$height")
+    else
+        PS3=">> "
+        echo "Multiple configurations for '${target}':"
+        select build_type in "${config_dirs[@]}"; do
+            if [ -n "$build_type" ]; then
+                break
+            fi
+            echo "Invalid selection, try again."
+        done
+    fi
+fi
+
+exec "$bindir/$v/${build_type}/${target}" "$@"
