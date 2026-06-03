@@ -110,7 +110,10 @@ endmacro()
 
 macro(nest_SETUP_HEADER_LIB)
     _m_nest_INIT_TARGET_SCOPE(${ARGN})
+    _nest_SETUP_HEADER_LIB_IMPL()
+endmacro()
 
+function(_nest_SETUP_HEADER_LIB_IMPL)
     message(STATUS "[nest] · HeaderLib: ${PROJECT_NAME}")
 
     add_library(${PROJECT_NAME} INTERFACE)
@@ -121,22 +124,22 @@ macro(nest_SETUP_HEADER_LIB)
         $<INSTALL_INTERFACE:include/${nest_TOPNAME}/${PROJECT_NAME}>
         $<INSTALL_INTERFACE:include/${nest_TOPNAME}/_private>)
 
-    _nest_GLOB(${PROJECT_SOURCE_DIR} l_SOURCES l_HEADERS)
-    if(l_HEADERS)
-        target_sources(${PROJECT_NAME} INTERFACE ${l_HEADERS})
+    _nest_GLOB(${PROJECT_SOURCE_DIR} l_sources l_headers)
+    if(l_headers)
+        target_sources(${PROJECT_NAME} INTERFACE ${l_headers})
     endif()
 
     if(_l_nest_DO_LINK)
         _nest_LINK_EXTERNAL(${PROJECT_NAME} "INTERFACE")
     endif()
 
-    if(l_HEADERS)
-        install(FILES ${l_HEADERS}
+    if(l_headers)
+        install(FILES ${l_headers}
             DESTINATION include/${nest_TOPNAME}/${PROJECT_NAME})
     endif()
     install(TARGETS ${PROJECT_NAME}
         EXPORT ${nest_TOPNAME}-targets)
-endmacro()
+endfunction()
 
 
 
