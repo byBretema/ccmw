@@ -6,11 +6,13 @@ include(FetchContent)
 
 set(FETCHCONTENT_BASE_DIR "${CMAKE_SOURCE_DIR}/.nest/vendor")
 
-# Tracks all external deps added via nest_FETCH_DEP / nest_SYS_DEP / etc.
+# Tracks all external deps added via nest_DEP
 set(_g_nest_EXTERNAL "" CACHE INTERNAL "Global external-dependencies list")
+set(_g_nest_EXTERNAL_CONFIG "" CACHE INTERNAL "External deps needing find_dependency in config file")
 
 # Root folder name used as namespace / project prefix
 get_filename_component(nest_TOPNAME ${CMAKE_CURRENT_SOURCE_DIR} NAME)
+string(TOUPPER "${nest_TOPNAME}" _g_nest_TOPNAME_UPPER)
 
 
 
@@ -20,6 +22,9 @@ get_filename_component(nest_TOPNAME ${CMAKE_CURRENT_SOURCE_DIR} NAME)
 macro(nest_INIT cxx_standard)
     message("")
 
+    include(GNUInstallDirs)
+
+    option(${_g_nest_TOPNAME_UPPER}_INSTALL_BINARY_ALL "Install all binary targets" ON)
     option(NEST_ASAN "Enable ASan" OFF)
     option(NEST_UBSAN "Enable UBSan" OFF)
     option(NEST_WERRORS "Treat compiler warnings as errors" OFF)
@@ -55,6 +60,15 @@ macro(nest_SETUP_EXE)
     _nest_SET_OUTPUT_DIR(${PROJECT_NAME} "bin/${PROJECT_NAME}")
 
     _m_nest_APPLY_STANDARD_PROPS(${PROJECT_NAME})
+
+    option(${_g_nest_TOPNAME_UPPER}_INSTALL_BINARY_${PROJECT_NAME}
+        "Install ${PROJECT_NAME} binary" ON)
+    if(${_g_nest_TOPNAME_UPPER}_INSTALL_BINARY_ALL
+        AND ${_g_nest_TOPNAME_UPPER}_INSTALL_BINARY_${PROJECT_NAME})
+        install(TARGETS ${PROJECT_NAME}
+            EXPORT ${nest_TOPNAME}-targets
+            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+    endif()
 endmacro()
 
 
@@ -74,7 +88,22 @@ macro(nest_SETUP_LIB lib_type)
             EXPORT_MACRO_NAME "${_l_nest_PROJECT_UPPER}_API"
             EXPORT_FILE_NAME  "${CMAKE_CURRENT_SOURCE_DIR}/export.h"
         )
-        target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
+        target_include_directories(${PROJECT_NAME} PUBLIC
+            $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>)
+    endif()
+
+    _nest_GLOB(${CMAKE_CURRENT_SOURCE_DIR} _l_nest_SOURCES _l_nest_HEADERS)
+    install(TARGETS ${PROJECT_NAME}
+        EXPORT ${nest_TOPNAME}-targets
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+    install(FILES ${_l_nest_HEADERS}
+        DESTINATION include/${nest_TOPNAME}/${PROJECT_NAME})
+    if("${lib_type}" STREQUAL "SHARED")
+        install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/export.h"
+            DESTINATION include/${nest_TOPNAME}/${PROJECT_NAME})
     endif()
 endmacro()
 
@@ -87,7 +116,10 @@ macro(nest_SETUP_HEADER_LIB)
     add_library(${PROJECT_NAME} INTERFACE)
     add_library(${nest_TOPNAME}::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
 
-    target_include_directories(${PROJECT_NAME} INTERFACE ${PROJECT_SOURCE_DIR})
+    target_include_directories(${PROJECT_NAME} INTERFACE
+        $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>
+        $<INSTALL_INTERFACE:include/${nest_TOPNAME}/${PROJECT_NAME}>
+        $<INSTALL_INTERFACE:include/${nest_TOPNAME}/_private>)
 
     _nest_GLOB(${PROJECT_SOURCE_DIR} l_SOURCES l_HEADERS)
     if(l_HEADERS)
@@ -97,28 +129,31 @@ macro(nest_SETUP_HEADER_LIB)
     if(_l_nest_DO_LINK)
         _nest_LINK_EXTERNAL(${PROJECT_NAME} "INTERFACE")
     endif()
+
+    if(l_HEADERS)
+        install(FILES ${l_HEADERS}
+            DESTINATION include/${nest_TOPNAME}/${PROJECT_NAME})
+    endif()
+    install(TARGETS ${PROJECT_NAME}
+        EXPORT ${nest_TOPNAME}-targets)
 endmacro()
 
 
-function(nest_FETCH_DEP lib_name lib_version lib_url)
-    nest_ADD_DEP("${lib_name}" "${lib_version}" "${lib_url}" FALSE)
+
+function(nest_DEP lib_name lib_version lib_url)
+    string(TOUPPER "${lib_name}" l_dep_upper)
+    option(${_g_nest_TOPNAME_UPPER}_USE_SYSTEM_${l_dep_upper}
+        "Use system ${lib_name} (skip FetchContent)" OFF)
+
+    if(${_g_nest_TOPNAME_UPPER}_USE_SYSTEM_${l_dep_upper})
+        _nest_DEP_IMPL("${lib_name}" "${lib_version}" "${lib_url}" TRUE)
+    else()
+        _nest_DEP_IMPL("${lib_name}" "${lib_version}" "${lib_url}" FALSE)
+    endif()
 endfunction()
 
 
-function(nest_SYS_FIRST_DEP lib_name lib_version lib_url)
-    nest_ADD_DEP("${lib_name}" "${lib_version}" "${lib_url}" TRUE)
-endfunction()
-
-
-function(nest_SYS_DEP lib_name lib_version)
-    find_package(${lib_name} ${lib_version} REQUIRED)
-    _nest_ADD_TO_EXTERNAL(${lib_name})
-    message(STATUS "[nest] · System: ${lib_name}")
-    message("")
-endfunction()
-
-
-function(nest_ADD_DEP lib_name lib_version lib_url sys_first)
+function(_nest_DEP_IMPL lib_name lib_version lib_url sys_first)
     if(sys_first)
         find_package(${lib_name} ${lib_version} QUIET)
     endif()
@@ -127,8 +162,10 @@ function(nest_ADD_DEP lib_name lib_version lib_url sys_first)
         message(STATUS "[nest] · External: ${lib_name}")
         FetchContent_Declare(${lib_name} DOWNLOAD_EXTRACT_TIMESTAMP OFF URL ${lib_url})
         FetchContent_MakeAvailable(${lib_name})
+        _nest_TRY_ADD_CONFIG(${lib_name})
     else()
         message(STATUS "[nest] · System: ${lib_name}")
+        _nest_ADD_TO_EXTERNAL_CONFIG(${lib_name})
     endif()
 
     _nest_ADD_TO_EXTERNAL(${lib_name})
@@ -138,40 +175,42 @@ endfunction()
 
 
 function(nest_DETECT_PROJECTS)
-    set(l_FOUND_DIRS "")
-    set(l_ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
-    set(l_PROJECTS_DIR "${l_ROOT_DIR}/projects")
+    set(l_found_dirs "")
+    set(l_root_dir ${CMAKE_CURRENT_SOURCE_DIR})
+    set(l_projects_dir "${l_root_dir}/projects")
 
-    if(NOT EXISTS "${l_PROJECTS_DIR}")
+    if(NOT EXISTS "${l_projects_dir}")
         return()
     endif()
 
-    file(GLOB l_ROOT_CONTENT LIST_DIRECTORIES TRUE RELATIVE "${l_PROJECTS_DIR}" "${l_PROJECTS_DIR}/*")
+    file(GLOB l_root_content LIST_DIRECTORIES TRUE RELATIVE "${l_projects_dir}" "${l_projects_dir}/*")
 
-    foreach(l_ITEM ${l_ROOT_CONTENT})
-        set(l_ITEM_DIR "${l_PROJECTS_DIR}/${l_ITEM}")
-        _nest_HAS_CMAKEFILE("${l_ITEM_DIR}" l_HAS_CMAKEFILE)
+    foreach(l_item ${l_root_content})
+        set(l_item_dir "${l_projects_dir}/${l_item}")
+        _nest_HAS_CMAKEFILE("${l_item_dir}" l_has_cmakefile)
 
-        if(${l_HAS_CMAKEFILE})
-            string(SUBSTRING "${l_ITEM}" 0 1 l_FIRST_CHAR)
-            if(NOT (l_FIRST_CHAR STREQUAL "."))
-                list(APPEND l_FOUND_DIRS "${l_ITEM}")
+        if(${l_has_cmakefile})
+            string(SUBSTRING "${l_item}" 0 1 l_first_char)
+            if(NOT (l_first_char STREQUAL "."))
+                list(APPEND l_found_dirs "${l_item}")
             endif()
         endif()
     endforeach()
 
-    foreach(l_DIR ${l_FOUND_DIRS})
-        add_subdirectory("projects/${l_DIR}")
+    foreach(l_dir ${l_found_dirs})
+        add_subdirectory("projects/${l_dir}")
     endforeach()
 endfunction()
 
 
-function(nest_ENABLE_TESTS)
-    if(NOT PROJECT_IS_TOP_LEVEL)
-        return()
+macro(nest_ENABLE_TESTS)
+    if(PROJECT_IS_TOP_LEVEL)
+        enable_testing()
+        _nest_ENABLE_TESTS_IMPL()
     endif()
+endmacro()
 
-    enable_testing()
+function(_nest_ENABLE_TESTS_IMPL)
     message(STATUS "[nest] · Enabling tests")
 
     _nest_GLOB("${CMAKE_SOURCE_DIR}/tests" l_sources l_headers)
@@ -205,24 +244,77 @@ function(nest_LINK_PROJECTS)
 endfunction()
 
 
+function(nest_GENERATE_EXPORT)
+    include(CMakePackageConfigHelpers)
+
+    install(EXPORT ${nest_TOPNAME}-targets
+        FILE ${nest_TOPNAME}-targets.cmake
+        NAMESPACE ${nest_TOPNAME}::
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${nest_TOPNAME})
+
+    set(NEST_CONFIG_FIND_DEPS "")
+    foreach(l_dep IN LISTS _g_nest_EXTERNAL_CONFIG)
+        string(APPEND NEST_CONFIG_FIND_DEPS "find_dependency(${l_dep})\n")
+    endforeach()
+
+    configure_package_config_file(
+        ${CMAKE_SOURCE_DIR}/cmake/${nest_TOPNAME}Config.cmake.in
+        ${CMAKE_BINARY_DIR}/${nest_TOPNAME}Config.cmake
+        INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${nest_TOPNAME})
+
+    install(FILES ${CMAKE_BINARY_DIR}/${nest_TOPNAME}Config.cmake
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${nest_TOPNAME})
+
+    if(NEST_VERSION)
+        write_basic_package_version_file(
+            ${CMAKE_BINARY_DIR}/${nest_TOPNAME}ConfigVersion.cmake
+            VERSION ${NEST_VERSION}
+            COMPATIBILITY AnyNewerVersion)
+        install(FILES ${CMAKE_BINARY_DIR}/${nest_TOPNAME}ConfigVersion.cmake
+            DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${nest_TOPNAME})
+    endif()
+
+    install(DIRECTORY ${CMAKE_SOURCE_DIR}/vendor/
+        DESTINATION include/${nest_TOPNAME}/_private)
+endfunction()
+
+
 
 # INTERNAL FUNCTIONS — _nest_
 ################################################################################
 
 function(_nest_ADD_TO_EXTERNAL lib_name)
-    set(l_TMP ${_g_nest_EXTERNAL})
-    list(APPEND l_TMP ${lib_name})
-    list(REMOVE_DUPLICATES l_TMP)
-    set(_g_nest_EXTERNAL "${l_TMP}" CACHE INTERNAL "Global external dependencies list")
+    set(l_tmp ${_g_nest_EXTERNAL})
+    list(APPEND l_tmp ${lib_name})
+    list(REMOVE_DUPLICATES l_tmp)
+    set(_g_nest_EXTERNAL "${l_tmp}" CACHE INTERNAL "Global external dependencies list")
+endfunction()
+
+
+function(_nest_ADD_TO_EXTERNAL_CONFIG lib_name)
+    set(l_tmp ${_g_nest_EXTERNAL_CONFIG})
+    list(APPEND l_tmp ${lib_name})
+    list(REMOVE_DUPLICATES l_tmp)
+    set(_g_nest_EXTERNAL_CONFIG "${l_tmp}" CACHE INTERNAL "External deps needing find_dependency")
+endfunction()
+
+
+function(_nest_TRY_ADD_CONFIG lib_name)
+    FetchContent_GetProperties(${lib_name} BINARY_DIR l_bin)
+    if(NOT "${l_bin}" STREQUAL ""
+       AND (EXISTS "${l_bin}/${lib_name}Config.cmake"
+            OR EXISTS "${l_bin}/${lib_name}-config.cmake"))
+        _nest_ADD_TO_EXTERNAL_CONFIG(${lib_name})
+    endif()
 endfunction()
 
 
 function(_nest_GLOB root_dir out_sources out_headers)
-    file(GLOB l_SOURCES CONFIGURE_DEPENDS "${root_dir}/*.cpp" "${root_dir}/*.cc" "${root_dir}/*.c")
-    set(${out_sources} "${l_SOURCES}" PARENT_SCOPE)
+    file(GLOB l_sources CONFIGURE_DEPENDS "${root_dir}/*.cpp" "${root_dir}/*.cc" "${root_dir}/*.c")
+    set(${out_sources} "${l_sources}" PARENT_SCOPE)
 
-    file(GLOB l_HEADERS CONFIGURE_DEPENDS "${root_dir}/*.hpp" "${root_dir}/*.hh" "${root_dir}/*.h")
-    set(${out_headers} "${l_HEADERS}" PARENT_SCOPE)
+    file(GLOB l_headers CONFIGURE_DEPENDS "${root_dir}/*.hpp" "${root_dir}/*.hh" "${root_dir}/*.h")
+    set(${out_headers} "${l_headers}" PARENT_SCOPE)
 endfunction()
 
 
@@ -279,16 +371,16 @@ function(_nest_SET_OUTPUT_DIR proj_name dir_name)
         set(NEST_VERSION "0.0.0")
     endif()
     if(CMAKE_CONFIGURATION_TYPES)
-        set(l_OUTPUT_DIR "${CMAKE_SOURCE_DIR}/.nest/${dir_name}/v${NEST_VERSION}")
+        set(l_output_dir "${CMAKE_SOURCE_DIR}/.nest/${dir_name}/v${NEST_VERSION}")
     else()
-        set(l_OUTPUT_DIR "${CMAKE_SOURCE_DIR}/.nest/${dir_name}/v${NEST_VERSION}/$<CONFIG>")
+        set(l_output_dir "${CMAKE_SOURCE_DIR}/.nest/${dir_name}/v${NEST_VERSION}/$<CONFIG>")
     endif()
-    message(DEBUG "[nest] · OutputDir -> ${l_OUTPUT_DIR}")
+    message(DEBUG "[nest] · OutputDir -> ${l_output_dir}")
 
     set_target_properties(${proj_name} PROPERTIES
-        ARCHIVE_OUTPUT_DIRECTORY "${l_OUTPUT_DIR}"
-        LIBRARY_OUTPUT_DIRECTORY "${l_OUTPUT_DIR}"
-        RUNTIME_OUTPUT_DIRECTORY "${l_OUTPUT_DIR}"
+        ARCHIVE_OUTPUT_DIRECTORY "${l_output_dir}"
+        LIBRARY_OUTPUT_DIRECTORY "${l_output_dir}"
+        RUNTIME_OUTPUT_DIRECTORY "${l_output_dir}"
     )
 endfunction()
 
@@ -303,13 +395,13 @@ endfunction()
 
 
 function(_nest_ADD_TARGET proj_name proj_root_dir target_type)
-    _nest_GLOB(${proj_root_dir} l_SOURCES l_HEADERS)
+    _nest_GLOB(${proj_root_dir} l_sources l_headers)
     if("${target_type}" STREQUAL "EXE")
         message(STATUS "[nest] · Project: ${proj_name}")
-        add_executable(${proj_name} ${l_SOURCES} ${l_HEADERS})
+        add_executable(${proj_name} ${l_sources} ${l_headers})
     else()
         message(STATUS "[nest] · Library: ${proj_name} (${target_type})")
-        add_library(${proj_name} ${target_type} ${l_SOURCES} ${l_HEADERS})
+        add_library(${proj_name} ${target_type} ${l_sources} ${l_headers})
     endif()
 endfunction()
 
@@ -339,10 +431,20 @@ macro(_m_nest_APPLY_STANDARD_PROPS target_name)
         EXPORT_COMPILE_COMMANDS ON
     )
 
-    target_include_directories(${target_name} PUBLIC
-        ${PROJECT_SOURCE_DIR}
-        ${CMAKE_SOURCE_DIR}/vendor
-    )
+    get_target_property(_l_nest_TYPE ${target_name} TYPE)
+    if("${_l_nest_TYPE}" STREQUAL "EXECUTABLE")
+        target_include_directories(${target_name} PRIVATE
+            ${PROJECT_SOURCE_DIR}
+            ${CMAKE_SOURCE_DIR}/vendor)
+    else()
+        target_include_directories(${target_name} PUBLIC
+            $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>
+            $<INSTALL_INTERFACE:include/${nest_TOPNAME}>
+            $<INSTALL_INTERFACE:include/${nest_TOPNAME}/_private>)
+        target_include_directories(${target_name} PRIVATE
+            $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/vendor>)
+    endif()
+
     _nest_SETUP_TARGET_FLAGS(${target_name})
 
     if(_l_nest_DO_LINK)
@@ -356,27 +458,27 @@ endmacro()
 ################################################################################
 
 function(s_nest_SCAFFOLD target_name target_type)
-    get_filename_component(l_ROOT "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
-    set(l_TARGET_DIR "${l_ROOT}/projects/${target_name}")
+    get_filename_component(l_root "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
+    set(l_target_dir "${l_root}/projects/${target_name}")
 
-    if(EXISTS "${l_TARGET_DIR}")
+    if(EXISTS "${l_target_dir}")
         message(FATAL_ERROR "🔴 Directory '${target_name}' already exists.")
     endif()
 
-    file(MAKE_DIRECTORY "${l_TARGET_DIR}")
+    file(MAKE_DIRECTORY "${l_target_dir}")
 
     if(target_type STREQUAL "EXE")
-        file(WRITE "${l_TARGET_DIR}/CMakeLists.txt" "nest_SETUP_EXE()\n")
-        file(WRITE "${l_TARGET_DIR}/main.cpp" "#include <cstdio>\n\nint main() {\n    std::puts(\"Hello from ${target_name}!\");\n}\n")
+        file(WRITE "${l_target_dir}/CMakeLists.txt" "nest_SETUP_EXE()\n")
+        file(WRITE "${l_target_dir}/main.cpp" "#include <cstdio>\n\nint main() {\n    std::puts(\"Hello from ${target_name}!\");\n}\n")
         message(STATUS "✅ Created executable project '${target_name}'")
     else()
-        file(WRITE "${l_TARGET_DIR}/CMakeLists.txt" "nest_SETUP_LIB(${target_type})\n")
-        file(WRITE "${l_TARGET_DIR}/${target_name}.hpp" "#pragma once\n")
+        file(WRITE "${l_target_dir}/CMakeLists.txt" "nest_SETUP_LIB(${target_type})\n")
+        file(WRITE "${l_target_dir}/${target_name}.hpp" "#pragma once\n")
         if(target_type STREQUAL "SHARED")
-            file(WRITE "${l_TARGET_DIR}/${target_name}.hpp" "#include \"export.h\"\n")
+            file(WRITE "${l_target_dir}/${target_name}.hpp" "#include \"export.h\"\n")
         endif()
 
-        file(WRITE "${l_TARGET_DIR}/${target_name}.cpp" "#include \"${target_name}.hpp\"\n")
+        file(WRITE "${l_target_dir}/${target_name}.cpp" "#include \"${target_name}.hpp\"\n")
         message(STATUS "✅ Created ${target_type} library project '${target_name}'")
     endif()
 endfunction()

@@ -1,0 +1,8 @@
+@PACKAGE_INIT@
+
+include("${CMAKE_CURRENT_LIST_DIR}/@nest_TOPNAME@-targets.cmake")
+
+include(CMakeFindDependencyMacro)
+@NEST_CONFIG_FIND_DEPS@
+
+check_required_components(@nest_TOPNAME@)
