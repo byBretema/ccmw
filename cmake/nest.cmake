@@ -29,9 +29,7 @@ macro(nest_INIT cxx_standard)
     option(NEST_UBSAN "Enable UBSan" OFF)
     option(NEST_WERRORS "Treat compiler warnings as errors" OFF)
 
-    if(NOT CMAKE_BUILD_TYPE)
-        set(CMAKE_BUILD_TYPE Debug)
-    endif()
+    set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type")
 
     set(_g_nest_CXX_STANDARD ${cxx_standard})
     set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -86,7 +84,6 @@ macro(nest_SETUP_LIB lib_type)
         string(TOUPPER "${PROJECT_NAME}" _l_nest_PROJECT_UPPER)
         generate_export_header(${PROJECT_NAME}
             EXPORT_MACRO_NAME "${_l_nest_PROJECT_UPPER}_API"
-            EXPORT_FILE_NAME  "${CMAKE_CURRENT_SOURCE_DIR}/export.h"
         )
         target_include_directories(${PROJECT_NAME} PUBLIC
             $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>)
@@ -102,7 +99,7 @@ macro(nest_SETUP_LIB lib_type)
     install(FILES ${_l_nest_HEADERS}
         DESTINATION include/${nest_TOPNAME}/${PROJECT_NAME})
     if("${lib_type}" STREQUAL "SHARED")
-        install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/export.h"
+        install(FILES "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}_export.h"
             DESTINATION include/${nest_TOPNAME}/${PROJECT_NAME})
     endif()
 endmacro()
@@ -127,10 +124,6 @@ function(_nest_SETUP_HEADER_LIB_IMPL)
     _nest_GLOB(${PROJECT_SOURCE_DIR} l_sources l_headers)
     if(l_headers)
         target_sources(${PROJECT_NAME} INTERFACE ${l_headers})
-    endif()
-
-    if(_l_nest_DO_LINK)
-        _nest_LINK_EXTERNAL(${PROJECT_NAME} "INTERFACE")
     endif()
 
     if(l_headers)
@@ -186,7 +179,7 @@ function(nest_DETECT_PROJECTS)
         return()
     endif()
 
-    file(GLOB l_root_content LIST_DIRECTORIES TRUE RELATIVE "${l_projects_dir}" "${l_projects_dir}/*")
+    file(GLOB l_root_content LIST_DIRECTORIES TRUE CONFIGURE_DEPENDS RELATIVE "${l_projects_dir}" "${l_projects_dir}/*")
 
     foreach(l_item ${l_root_content})
         set(l_item_dir "${l_projects_dir}/${l_item}")
@@ -224,7 +217,9 @@ function(_nest_ENABLE_TESTS_IMPL)
         add_executable(${l_name} "${l_source}")
 
         _nest_SETUP_TARGET_FLAGS(${l_name})
-        _nest_LINK_EXTERNAL(${l_name})
+        if(_g_nest_EXTERNAL)
+            target_link_libraries(${l_name} PRIVATE ${_g_nest_EXTERNAL})
+        endif()
 
         target_include_directories(${l_name} PRIVATE "${CMAKE_SOURCE_DIR}/vendor")
 
@@ -321,13 +316,13 @@ function(_nest_GLOB root_dir out_sources out_headers)
 endfunction()
 
 
-function(_nest_LINK_EXTERNAL proj_name)
-    set(l_visibility "PRIVATE")
-    if(ARGC GREATER 1)
-        set(l_visibility "${ARGV1}")
-    endif()
+function(nest_LINK_EXTERNAL)
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${ARGN})
+endfunction()
+
+function(nest_LINK_EXTERNAL_ALL)
     if(_g_nest_EXTERNAL)
-        target_link_libraries(${proj_name} ${l_visibility} ${_g_nest_EXTERNAL})
+        target_link_libraries(${PROJECT_NAME} PRIVATE ${_g_nest_EXTERNAL})
     endif()
 endfunction()
 
@@ -373,11 +368,7 @@ function(_nest_SET_OUTPUT_DIR proj_name dir_name)
     if(NOT NEST_VERSION)
         set(NEST_VERSION "0.0.0")
     endif()
-    if(CMAKE_CONFIGURATION_TYPES)
-        set(l_output_dir "${CMAKE_SOURCE_DIR}/.nest/${dir_name}/v${NEST_VERSION}")
-    else()
-        set(l_output_dir "${CMAKE_SOURCE_DIR}/.nest/${dir_name}/v${NEST_VERSION}/$<CONFIG>")
-    endif()
+    set(l_output_dir "${CMAKE_SOURCE_DIR}/.nest/${dir_name}/v${NEST_VERSION}/$<CONFIG>")
     message(DEBUG "[nest] · OutputDir -> ${l_output_dir}")
 
     set_target_properties(${proj_name} PROPERTIES
@@ -414,13 +405,6 @@ endfunction()
 ################################################################################
 
 macro(_m_nest_INIT_TARGET_SCOPE)
-    set(_l_nest_WANT_LINK ${ARGN})
-    if(_l_nest_WANT_LINK)
-        list(POP_FRONT _l_nest_WANT_LINK _l_nest_DO_LINK)
-    else()
-        set(_l_nest_DO_LINK FALSE)
-    endif()
-
     get_filename_component(_l_nest_NAME_AUX ${CMAKE_CURRENT_SOURCE_DIR} NAME)
     string(REPLACE " " "_" _l_nest_NAME "${_l_nest_NAME_AUX}")
     project(${_l_nest_NAME})
@@ -449,10 +433,6 @@ macro(_m_nest_APPLY_STANDARD_PROPS target_name)
     endif()
 
     _nest_SETUP_TARGET_FLAGS(${target_name})
-
-    if(_l_nest_DO_LINK)
-        _nest_LINK_EXTERNAL(${target_name})
-    endif()
 endmacro()
 
 
@@ -478,7 +458,7 @@ function(s_nest_SCAFFOLD target_name target_type)
         file(WRITE "${l_target_dir}/CMakeLists.txt" "nest_SETUP_LIB(${target_type})\n")
         file(WRITE "${l_target_dir}/${target_name}.hpp" "#pragma once\n")
         if(target_type STREQUAL "SHARED")
-            file(WRITE "${l_target_dir}/${target_name}.hpp" "#include \"export.h\"\n")
+            file(APPEND "${l_target_dir}/${target_name}.hpp" "#include \"${target_name}_export.h\"\n")
         endif()
 
         file(WRITE "${l_target_dir}/${target_name}.cpp" "#include \"${target_name}.hpp\"\n")
