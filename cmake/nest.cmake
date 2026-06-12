@@ -10,6 +10,44 @@ set(FETCHCONTENT_BASE_DIR "${CMAKE_SOURCE_DIR}/.nest/vendor")
 set(_g_nest_EXTERNAL "" CACHE INTERNAL "Global external-dependencies list")
 set(_g_nest_EXTERNAL_CONFIG "" CACHE INTERNAL "External deps needing find_dependency in config file")
 
+# Lockfile helpers
+
+
+function(_nest_LOCKFILE_GET dep_name key out_var)
+    if(EXISTS "${CMAKE_SOURCE_DIR}/nest.lock")
+        file(READ "${CMAKE_SOURCE_DIR}/nest.lock" l_json_raw)
+        string(STRIP "${l_json_raw}" l_json)
+    else()
+        set(l_json "{}")
+    endif()
+    string(JSON l_val ERROR_VARIABLE l_err GET "${l_json}" "${dep_name}" "${key}")
+    if(l_err)
+        set(${out_var} "" PARENT_SCOPE)
+    else()
+        set(${out_var} "${l_val}" PARENT_SCOPE)
+    endif()
+endfunction()
+
+
+function(_nest_LOCKFILE_SET dep_name version sha256 url)
+    if(EXISTS "${CMAKE_SOURCE_DIR}/nest.lock")
+        file(READ "${CMAKE_SOURCE_DIR}/nest.lock" l_json_raw)
+        string(STRIP "${l_json_raw}" l_json)
+    else()
+        set(l_json "{}")
+    endif()
+    string(JSON l_json ERROR_VARIABLE l_err
+        SET "${l_json}" "${dep_name}" "{}")
+    string(JSON l_json ERROR_VARIABLE l_err
+        SET "${l_json}" "${dep_name}" "version" "\"${version}\"")
+    string(JSON l_json ERROR_VARIABLE l_err
+        SET "${l_json}" "${dep_name}" "sha256" "\"${sha256}\"")
+    string(JSON l_json ERROR_VARIABLE l_err
+        SET "${l_json}" "${dep_name}" "url" "\"${url}\"")
+    file(WRITE "${CMAKE_SOURCE_DIR}/nest.lock" "${l_json}\n")
+    message(STATUS "[nest] · Lockfile updated: nest.lock")
+endfunction()
+
 # Root folder name used as namespace / project prefix
 get_filename_component(nest_TOPNAME ${CMAKE_CURRENT_SOURCE_DIR} NAME)
 string(TOUPPER "${nest_TOPNAME}" _g_nest_TOPNAME_UPPER)
@@ -42,6 +80,15 @@ macro(nest_INIT cxx_standard)
     else()
         message(STATUS "[nest] · Build Cache: ccache not found")
     endif()
+
+    # --- Lockfile: one-shot update flag ---
+    if(DEFINED UPDATE_NEST_LOCK)
+        file(REMOVE "${CMAKE_SOURCE_DIR}/nest.lock")
+        file(REMOVE_RECURSE "${FETCHCONTENT_BASE_DIR}")
+        unset(UPDATE_NEST_LOCK CACHE)
+        message(STATUS "[nest] · Regenerating lockfile (UPDATE_NEST_LOCK)")
+    endif()
+
     message("")
 endmacro()
 
@@ -138,6 +185,12 @@ endfunction()
 
 function(nest_DEP lib_name lib_version lib_url)
     string(TOUPPER "${lib_name}" l_dep_upper)
+
+    if(NOT lib_url MATCHES "refs/tags/")
+        message(WARNING "[nest] · ${lib_name}: URL does not point to a tag. "
+            "Prefer refs/tags/ for reproducible deps.")
+    endif()
+
     option(${_g_nest_TOPNAME_UPPER}_USE_SYSTEM_${l_dep_upper}
         "Use system ${lib_name} (skip FetchContent)" OFF)
 
@@ -155,9 +208,61 @@ function(_nest_DEP_IMPL lib_name lib_version lib_url sys_first)
     endif()
 
     if(NOT ${lib_name}_FOUND)
-        message(STATUS "[nest] · External: ${lib_name}")
-        FetchContent_Declare(${lib_name} DOWNLOAD_EXTRACT_TIMESTAMP OFF URL ${lib_url})
-        FetchContent_MakeAvailable(${lib_name})
+        message(STATUS "[nest] · External: ${lib_name} ${lib_version}")
+
+        # --- Lockfile: check existing entry ---
+        _nest_LOCKFILE_GET("${lib_name}" "sha256" l_hash)
+        _nest_LOCKFILE_GET("${lib_name}" "url" l_locked_url)
+
+        # If URL changed, invalidate hash
+        if(l_locked_url AND NOT l_locked_url STREQUAL lib_url)
+            message(STATUS "[nest] · ···· URL changed for ${lib_name}, re-fetching")
+            set(l_hash "")
+        endif()
+
+        if(l_hash)
+            # Hash known — pass URL_HASH for verification
+            message(STATUS "[nest] · ···· Locked: sha256=${l_hash}")
+            FetchContent_Declare(${lib_name}
+                DOWNLOAD_EXTRACT_TIMESTAMP OFF
+                URL ${lib_url}
+                URL_HASH SHA256=${l_hash}
+            )
+            FetchContent_MakeAvailable(${lib_name})
+        else()
+            # No hash yet — download, compute, save to lockfile
+            set(l_cache_dir "${FETCHCONTENT_BASE_DIR}/__lockcache__")
+            file(MAKE_DIRECTORY "${l_cache_dir}")
+            get_filename_component(l_archive_name "${lib_url}" NAME)
+            if(NOT l_archive_name)
+                set(l_archive_name "${lib_name}.zip")
+            endif()
+            set(l_archive_path "${l_cache_dir}/${l_archive_name}")
+
+            message(STATUS "[nest] · ···· Downloading to compute hash")
+            file(DOWNLOAD ${lib_url} "${l_archive_path}"
+                SHOW_PROGRESS STATUS l_dl_status LOG l_dl_log)
+
+            list(GET l_dl_status 0 l_dl_code)
+            if(NOT l_dl_code EQUAL 0)
+                list(GET l_dl_status 1 l_dl_msg)
+                message(FATAL_ERROR "[nest] · ···· ···· Failed to download ${lib_name}: ${l_dl_msg}")
+            endif()
+
+            file(SHA256 "${l_archive_path}" l_hash)
+            string(SUBSTRING "${l_hash}" 0 16 l_hash_short)
+            message(STATUS "[nest] · ···· SHA256: ${l_hash_short}")
+
+            _nest_LOCKFILE_SET("${lib_name}" "${lib_version}" "${l_hash}" "${lib_url}")
+
+            FetchContent_Declare(${lib_name}
+                DOWNLOAD_EXTRACT_TIMESTAMP OFF
+                URL "${l_archive_path}"
+                URL_HASH SHA256=${l_hash}
+            )
+            FetchContent_MakeAvailable(${lib_name})
+        endif()
+
         _nest_TRY_ADD_CONFIG(${lib_name})
     else()
         message(STATUS "[nest] · System: ${lib_name}")
