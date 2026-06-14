@@ -10,6 +10,11 @@ set(FETCHCONTENT_BASE_DIR "${CMAKE_SOURCE_DIR}/.nest/vendor")
 set(_g_nest_EXTERNAL "" CACHE INTERNAL "Global external-dependencies list")
 set(_g_nest_EXTERNAL_CONFIG "" CACHE INTERNAL "External deps needing find_dependency in config file")
 
+# Version conflict tracking
+set(_g_nest_DEP_NAMES "" CACHE INTERNAL "Dependency names registered via nest_DEP")
+set(_g_nest_DEP_VERSIONS "" CACHE INTERNAL "Dependency versions registered via nest_DEP")
+set(_g_nest_DEP_PROJECTS "" CACHE INTERNAL "Projects that registered each dependency")
+
 # Lockfile helpers
 
 
@@ -189,6 +194,22 @@ function(nest_DEP lib_name lib_version lib_url)
     if(NOT lib_url MATCHES "refs/tags/")
         message(WARNING "[nest] · ${lib_name}: URL does not point to a tag. "
             "Prefer refs/tags/ for reproducible deps.")
+    endif()
+
+    # --- Version conflict detection ---
+    list(FIND _g_nest_DEP_NAMES "${lib_name}" _l_dep_idx)
+    if(_l_dep_idx GREATER -1)
+        list(GET _g_nest_DEP_VERSIONS ${_l_dep_idx} _l_existing_ver)
+        if(NOT _l_existing_ver STREQUAL "${lib_version}")
+            list(GET _g_nest_DEP_PROJECTS ${_l_dep_idx} _l_existing_proj)
+            message(WARNING "[nest] · VERSION CONFLICT: ${lib_name}"
+                " requested v${lib_version} (from ${PROJECT_NAME})"
+                " but already declared as v${_l_existing_ver} (from ${_l_existing_proj})")
+        endif()
+    else()
+        list(APPEND _g_nest_DEP_NAMES "${lib_name}")
+        list(APPEND _g_nest_DEP_VERSIONS "${lib_version}")
+        list(APPEND _g_nest_DEP_PROJECTS "${PROJECT_NAME}")
     endif()
 
     option(${_g_nest_TOPNAME_UPPER}_USE_SYSTEM_${l_dep_upper}
@@ -421,14 +442,8 @@ function(_nest_GLOB root_dir out_sources out_headers)
 endfunction()
 
 
-function(nest_LINK_EXTERNAL)
+function(nest_LINK)
     target_link_libraries(${PROJECT_NAME} PRIVATE ${ARGN})
-endfunction()
-
-function(nest_LINK_EXTERNAL_ALL)
-    if(_g_nest_EXTERNAL)
-        target_link_libraries(${PROJECT_NAME} PRIVATE ${_g_nest_EXTERNAL})
-    endif()
 endfunction()
 
 
@@ -556,11 +571,11 @@ function(s_nest_SCAFFOLD target_name target_type)
     file(MAKE_DIRECTORY "${l_target_dir}")
 
     if(target_type STREQUAL "EXE")
-        file(WRITE "${l_target_dir}/CMakeLists.txt" "nest_SETUP_EXE()\n")
+        file(WRITE "${l_target_dir}/CMakeLists.txt" "nest_VERSION(0 0 1)\nnest_SETUP_EXE()\n# nest_LINK(foo bar)\n")
         file(WRITE "${l_target_dir}/main.cpp" "#include <cstdio>\n\nint main() {\n    std::puts(\"Hello from ${target_name}!\");\n}\n")
         message(STATUS "✅ Created executable project '${target_name}'")
     else()
-        file(WRITE "${l_target_dir}/CMakeLists.txt" "nest_SETUP_LIB(${target_type})\n")
+        file(WRITE "${l_target_dir}/CMakeLists.txt" "nest_VERSION(0 0 1)\nnest_SETUP_LIB(${target_type})\n# nest_LINK(foo bar)\n")
         file(WRITE "${l_target_dir}/${target_name}.hpp" "#pragma once\n")
         if(target_type STREQUAL "SHARED")
             file(APPEND "${l_target_dir}/${target_name}.hpp" "#include \"${target_name}_export.h\"\n")

@@ -1,0 +1,14 @@
+{
+  "fmt" : 
+  {
+    "sha256" : "7e85cbf6125a76daa0f83cd9240eff863d988aca68cd5f66c01ff7b59fa886b6",
+    "url" : "https://github.com/fmtlib/fmt/archive/refs/tags/11.1.4.zip",
+    "version" : "11.1.4"
+  },
+  "glm" : 
+  {
+    "sha256" : "3aa4347b8f13cba882df1c7b61a6ca910c75a875c56ec3d75d7dc9ae8eac34df",
+    "url" : "https://github.com/g-truc/glm/archive/refs/tags/1.0.3.zip",
+    "version" : "1.0.3"
+  }
+}
