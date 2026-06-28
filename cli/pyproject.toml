@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nest"
+version = "0.1.0"
+description = "Nest — C++ CMake wrapper CLI"
+requires-python = ">=3.10"
+
+[project.scripts]
+nest = "nest:main"
+
+[tool.setuptools]
+py-modules = ["nest"]
