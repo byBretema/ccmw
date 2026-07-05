@@ -1,0 +1,75 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "hidden": true,
+      "name": "base",
+      "binaryDir": "${sourceDir}/.nest/build"
+    },
+    {
+      "hidden": true,
+      "name": "dbg",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+    },
+    {
+      "hidden": true,
+      "name": "rel",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+    },
+    {
+      "hidden": true,
+      "name": "werror",
+      "cacheVariables": { "NEST_WERRORS": "ON" }
+    },
+    {
+      "hidden": true,
+      "name": "asan",
+      "cacheVariables": { "NEST_ASAN": "ON" }
+    },
+    {
+      "hidden": true,
+      "name": "ubsan",
+      "cacheVariables": { "NEST_UBSAN": "ON" }
+    },
+    {
+      "hidden": true,
+      "name": "san",
+      "inherits": ["asan", "ubsan"]
+    },
+
+    { "name": "debug",                    "inherits": ["base", "dbg"] },
+    { "name": "debug-strict",             "inherits": ["base", "dbg", "werror"] },
+    { "name": "debug-asan",               "inherits": ["base", "dbg", "asan"] },
+    { "name": "debug-ubsan",              "inherits": ["base", "dbg", "ubsan"] },
+    { "name": "debug-sanitizers",         "inherits": ["base", "dbg", "san"] },
+    { "name": "debug-asan-strict",        "inherits": ["base", "dbg", "asan", "werror"] },
+    { "name": "debug-ubsan-strict",       "inherits": ["base", "dbg", "ubsan", "werror"] },
+    { "name": "debug-sanitizers-strict",  "inherits": ["base", "dbg", "san", "werror"] },
+    { "name": "release",                  "inherits": ["base", "rel"] },
+    { "name": "release-strict",           "inherits": ["base", "rel", "werror"] },
+    { "name": "release-asan",             "inherits": ["base", "rel", "asan"] },
+    { "name": "release-ubsan",            "inherits": ["base", "rel", "ubsan"] },
+    { "name": "release-sanitizers",       "inherits": ["base", "rel", "san"] },
+    { "name": "release-asan-strict",      "inherits": ["base", "rel", "asan", "werror"] },
+    { "name": "release-ubsan-strict",     "inherits": ["base", "rel", "ubsan", "werror"] },
+    { "name": "release-sanitizers-strict","inherits": ["base", "rel", "san", "werror"] }
+  ],
+  "buildPresets": [
+    { "name": "debug",                    "configurePreset": "debug" },
+    { "name": "debug-strict",             "configurePreset": "debug-strict" },
+    { "name": "debug-asan",               "configurePreset": "debug-asan" },
+    { "name": "debug-ubsan",              "configurePreset": "debug-ubsan" },
+    { "name": "debug-sanitizers",         "configurePreset": "debug-sanitizers" },
+    { "name": "debug-asan-strict",        "configurePreset": "debug-asan-strict" },
+    { "name": "debug-ubsan-strict",       "configurePreset": "debug-ubsan-strict" },
+    { "name": "debug-sanitizers-strict",  "configurePreset": "debug-sanitizers-strict" },
+    { "name": "release",                  "configurePreset": "release" },
+    { "name": "release-strict",           "configurePreset": "release-strict" },
+    { "name": "release-asan",             "configurePreset": "release-asan" },
+    { "name": "release-ubsan",            "configurePreset": "release-ubsan" },
+    { "name": "release-sanitizers",       "configurePreset": "release-sanitizers" },
+    { "name": "release-asan-strict",      "configurePreset": "release-asan-strict" },
+    { "name": "release-ubsan-strict",     "configurePreset": "release-ubsan-strict" },
+    { "name": "release-sanitizers-strict","configurePreset": "release-sanitizers-strict" }
+  ]
+}

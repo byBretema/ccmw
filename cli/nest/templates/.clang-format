@@ -1,0 +1,25 @@
+Language: Cpp
+Standard: Latest
+BasedOnStyle: LLVM
+
+MaxEmptyLinesToKeep: 2
+
+UseTab: Never
+TabWidth: 4
+IndentWidth: 4
+AccessModifierOffset: -4
+ContinuationIndentWidth: 2
+
+ColumnLimit: 120
+BreakTemplateDeclarations: Yes
+
+PointerAlignment: Right
+ReferenceAlignment: Right
+
+Cpp11BracedListStyle: false      # 'false' => { a, b, c } instead of {a, b, c}
+SpaceBeforeCpp11BracedList: true # 'true'  => x { 1 } instead of x{ 1 }
+
+#### BreakBeforeBraces: Allman
+#### AllowShortLambdasOnASingleLine: Empty
+...
+

@@ -6,6 +6,7 @@ import json
 import os
 import pathlib
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -14,6 +15,8 @@ from typing import Any, NoReturn
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
+_HERE = pathlib.Path(__file__).resolve().parent
+_TEMPLATES_DIR = _HERE / "templates"
 
 
 # ── ANSI ─────────────────────────────────────────────────────────────────────
@@ -67,15 +70,15 @@ def _info(msg: str) -> None:
 
 
 def _ok(msg: str) -> None:
-    print(f"  {_green('✔')} {msg}", flush=True)
+    print(f"  {_green('✔')}  {msg}", flush=True)
 
 
 def _warn(msg: str) -> None:
-    print(f"  {_yellow('⚠')} {msg}", flush=True)
+    print(f"  {_yellow('⚠')}  {msg}", flush=True)
 
 
 def _err(msg: str) -> None:
-    print(f"  {_red('✘')} {msg}", file=sys.stderr, flush=True)
+    print(f"  {_red('✘')}  {msg}", file=sys.stderr, flush=True)
 
 
 def _error_exit(msg: str, code: int = 1) -> NoReturn:
@@ -85,6 +88,7 @@ def _error_exit(msg: str, code: int = 1) -> NoReturn:
 
 # ── Paths ────────────────────────────────────────────────────────────────────
 
+
 @dataclass
 class _BinaryInfo:
     version: str
@@ -92,17 +96,16 @@ class _BinaryInfo:
     path: pathlib.Path
 
 
-def _find_root() -> pathlib.Path:
+def _find_root() -> pathlib.Path | None:
     cwd = pathlib.Path.cwd().resolve()
     for parent in [cwd, *cwd.parents]:
-        if (parent / "CMakeLists.txt").exists() and (
-            parent / "cmake" / "nest.cmake"
-        ).exists():
+        if (parent / "CMakeLists.txt").exists() and (parent / "cmake" / "nest.cmake").exists():
             return parent
-    _error_exit("not inside a Nest project (no CMakeLists.txt with cmake/nest.cmake found)")
+    return None
 
 
-ROOT = _find_root()
+_found_root = _find_root()
+ROOT = _found_root if _found_root is not None else pathlib.Path.cwd().resolve()
 NEST_DIR = ROOT / ".nest"
 BUILD_DIR = NEST_DIR / "build"
 PROJECTS_DIR = ROOT / "projects"
@@ -134,6 +137,7 @@ def _run_or_exit(
     _require_cmd(cmd[0])
     result = subprocess.run(cmd, cwd=cwd, check=False, **kwargs)
     if result.returncode != 0:
+        print(f"  $ {shlex.join(cmd)}", file=sys.stderr)
         _error_exit(msg, code=result.returncode)
     return result
 
@@ -188,11 +192,7 @@ def _get_tests() -> list[str]:
 
 def _get_presets() -> list[str]:
     data = _read_json(ROOT / "CMakePresets.json")
-    return [
-        p["name"]
-        for p in data.get("configurePresets", [])
-        if not p.get("hidden", False)
-    ]
+    return [p["name"] for p in data.get("configurePresets", []) if not p.get("hidden", False)]
 
 
 # ── Preset Management ────────────────────────────────────────────────────────
@@ -211,12 +211,12 @@ def _set_default_preset(name: str) -> None:
 
 
 def _resolve_preset(args: argparse.Namespace) -> str:
+    if args.preset:
+        return args.preset
     if args.release:
         return "release"
     if args.debug:
         return "debug"
-    if args.preset:
-        return args.preset
     return _get_default_preset()
 
 
@@ -224,14 +224,10 @@ def _resolve_preset(args: argparse.Namespace) -> str:
 
 
 def _add_preset_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("-p", "--preset", help="Build preset")
     group = parser.add_mutually_exclusive_group()
-    group.add_argument(
-        "--release", action="store_true", help="Shortcut for --preset release"
-    )
-    group.add_argument(
-        "--debug", action="store_true", help="Shortcut for --preset debug"
-    )
+    group.add_argument("-p", "--preset", help="Build preset")
+    group.add_argument("--release", action="store_true", help="Shortcut for --preset release")
+    group.add_argument("--debug", action="store_true", help="Shortcut for --preset debug")
 
 
 def _add_target_args(parser: argparse.ArgumentParser) -> None:
@@ -246,9 +242,11 @@ def _add_target_args(parser: argparse.ArgumentParser) -> None:
 # ── Build System ─────────────────────────────────────────────────────────────
 
 
-def _configure(preset: str) -> None:
+def _configure(preset: str, verbose: bool = False) -> None:
     _info(f"Configuring (preset: {preset})")
     cmd = ["cmake", "--preset", preset, "-G", "Ninja"]
+    if verbose:
+        _info(f"$ {shlex.join(cmd)}")
     _run_or_exit(cmd, "Configure failed")
     src = BUILD_DIR / "compile_commands.json"
     dst = ROOT / "compile_commands.json"
@@ -257,15 +255,17 @@ def _configure(preset: str) -> None:
     _ok("Configured")
 
 
-def _build(targets: list[str] | None, preset: str) -> None:
+def _build(targets: list[str] | None, preset: str, verbose: bool = False) -> None:
     if not BUILD_DIR.exists():
-        _configure(preset)
+        _configure(preset, verbose=verbose)
     jobs = _num_cpus()
     cmd = ["cmake", "--build", str(BUILD_DIR), "-j", str(jobs)]
     if targets:
         cmd.extend(["--target", *targets])
     label = "all" if not targets else ", ".join(targets)
     _info(f"Building {label} ({preset})")
+    if verbose:
+        _info(f"$ {shlex.join(cmd)}")
     _run_or_exit(cmd, "Build failed")
     _ok("Build complete")
 
@@ -359,11 +359,7 @@ def _scaffold(name: str, type_: str) -> None:
             "nest_VERSION(0 0 1)\nnest_SETUP_EXE()\n# nest_LINK(foo bar)\n",
         )
         (target_dir / "main.cpp").write_text(
-            "#include <cstdio>\n\n"
-            "int main() {\n"
-            f'    std::puts("Hello from {name}!");\n'
-            "    return 0;\n"
-            "}\n",
+            "#include <cstdio>\n\n" "int main() {\n" f'    std::puts("Hello from {name}!");\n' "    return 0;\n" "}\n",
         )
         _ok(f"Created executable '{name}'")
     else:
@@ -382,7 +378,7 @@ def _scaffold(name: str, type_: str) -> None:
 # ── Command Handlers ─────────────────────────────────────────────────────────
 
 
-def _cmd_list(args: argparse.Namespace) -> None:
+def _cmd_list(_: argparse.Namespace) -> None:
     projects = _get_projects()
     tests = _get_tests()
     presets = _get_presets()
@@ -410,30 +406,35 @@ def _cmd_list(args: argparse.Namespace) -> None:
 
 
 def _cmd_build(args: argparse.Namespace) -> None:
-    _build(args.targets, _resolve_preset(args))
+    _build(args.targets, _resolve_preset(args), verbose=args.verbose)
 
 
 def _cmd_run(args: argparse.Namespace) -> None:
+    if args.target is None:
+        projects = _get_projects()
+        if not projects:
+            _error_exit("No projects found to run")
+        chosen = _interactive_select(projects, "Choose target > ")
+        if not chosen:
+            _error_exit("Selection cancelled")
+        args.target = chosen
     preset = _resolve_preset(args)
-    _build([args.target], preset)
+    _build([args.target], preset, verbose=args.verbose)
     binary = _pick_binary(args.target)
-    _info(
-        f"Running {_bold(binary.name)} {' '.join(args.args) if args.args else ''}"
-    )
-    sys.stdout.flush()
-    sys.stderr.flush()
-    os.execv(str(binary), [str(binary), *args.args])
+    _info(f"Running {_bold(binary.name)} {' '.join(args.args) if args.args else ''}")
+    result = subprocess.run([str(binary), *args.args])
+    sys.exit(result.returncode)
 
 
 def _cmd_test(args: argparse.Namespace) -> None:
     preset = _resolve_preset(args)
     test_names = args.tests
     if test_names:
-        _build(test_names, preset)
+        _build(test_names, preset, verbose=args.verbose)
     else:
         tests = _get_tests()
         if tests:
-            _build(tests, preset)
+            _build(tests, preset, verbose=args.verbose)
     jobs = _num_cpus()
     cmd: list[str] = [
         "ctest",
@@ -450,6 +451,8 @@ def _cmd_test(args: argparse.Namespace) -> None:
     if test_names:
         cmd.extend(["-R", "^(" + "|".join(test_names) + ")$"])
     _info("Running tests")
+    if args.verbose:
+        _info(f"$ {shlex.join(cmd)}")
     _run_or_exit(cmd, "Some tests failed")
     _ok("All tests passed")
 
@@ -475,7 +478,7 @@ def _cmd_clean(args: argparse.Namespace) -> None:
     _ok("Clean complete")
 
 
-def _cmd_preset_list(args: argparse.Namespace) -> None:
+def _cmd_preset_list(_: argparse.Namespace) -> None:
     presets = _get_presets()
     default = _get_default_preset()
     print()
@@ -492,6 +495,104 @@ def _cmd_preset_set(args: argparse.Namespace) -> None:
     _set_default_preset(args.name)
 
 
+# ── Init Helpers ─────────────────────────────────────────────────────────────
+
+
+_GITIGNORE_BLOCK = """\
+.nest/
+Testing/
+Makefile
+CMakeFiles/
+CMakeScripts/
+CMakeCache.txt
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dylib
+*.dll
+*.exe
+*.out
+.DS_Store
+"""
+
+
+def _init_try_copy(src: pathlib.Path, dst: pathlib.Path) -> None:
+    if dst.exists():
+        _warn(f"Skipped {dst.name} \u2014 already exists")
+    else:
+        shutil.copy2(src, dst)
+        _ok(f"Created {dst.name}")
+
+
+def _init_try_write(dst: pathlib.Path, content: str) -> None:
+    if dst.exists():
+        _warn(f"Skipped {dst.name} \u2014 already exists")
+    else:
+        dst.write_text(content)
+        _ok(f"Created {dst.name}")
+
+
+def _init_gitignore(dst: pathlib.Path) -> None:
+    if dst.exists():
+        content = dst.read_text()
+        if ".nest/" in content:
+            _warn("Skipped .gitignore \u2014 already has .nest/ entry")
+            return
+        dst.write_text(content.rstrip() + "\n\n" + _GITIGNORE_BLOCK)
+        _ok("Extended .gitignore with NEST entries")
+    else:
+        dst.write_text(_GITIGNORE_BLOCK)
+        _ok("Created .gitignore")
+
+
+def _cmd_init(args: argparse.Namespace) -> None:
+    target = ROOT
+
+    name = target.name
+    if args.name:
+        name = args.name
+    elif args.interactive:
+        print(f"  Project name [{name}]: ", end="", flush=True)
+        inp = input().strip()
+        if inp:
+            name = inp
+
+    for d in ["cmake", "projects", "tests", "vendor"]:
+        (target / d).mkdir(exist_ok=True)
+
+    for t in sorted(_TEMPLATES_DIR.iterdir()):
+        if t.name in ("nest.cmake", "nestConfig.cmake.in"):
+            _init_try_copy(t, target / "cmake" / t.name)
+        else:
+            _init_try_copy(t, target / t.name)
+
+    cmake_content = f"""cmake_minimum_required(VERSION 3.28)
+include(cmake/nest.cmake)
+project({name})
+
+nest_VERSION(0 0 1)
+nest_INIT(20)
+
+nest_DETECT_PROJECTS()
+nest_ENABLE_TESTS()
+nest_GENERATE_EXPORT()
+"""
+    _init_try_write(target / "CMakeLists.txt", cmake_content)
+
+    _init_gitignore(target / ".gitignore")
+
+    config_dir = target / ".nest"
+    config_dir.mkdir(exist_ok=True)
+    _init_try_write(config_dir / "config.json", json.dumps({"default_preset": "debug"}, indent=4) + "\n")
+
+    _ok(f"Nest project '{name}' initialized")
+
+
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 
@@ -501,23 +602,34 @@ def main() -> None:
         description="C++ CMake wrapper build tool",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
-examples:
-  nest                        list projects, tests, presets
-  nest build                  build all projects
-  nest build myapp             build specific target
-  nest build --release         build with release preset
-  nest run myapp               build and run
-  nest run myapp -- --arg1      pass arguments to target
-  nest test                    build and run all tests
-  nest test --verbose           with verbose output
-  nest test test_math test_y    specific tests
-  nest new myapp               create new executable
-  nest new mylib -t static      create new static library
-  nest preset list              show presets
-  nest preset set release       change default preset
-  nest clean                    clean build artifacts
-  nest clean --all              full clean (removes .nest/)
-""",
+examples:"""
+        + "\n  "
+        + "\n  ".join(
+            f"{cmd:<28s} {desc}"
+            for cmd, desc in [
+                ("nest", "list projects, tests, presets"),
+                ("nest init", "initialize a Nest project in current directory"),
+                ("nest init -n myproj", "with explicit project name"),
+                ("nest init -i", "prompt to confirm project name"),
+                ("nest build", "build all projects"),
+                ("nest build -v", "build with verbose cmake output"),
+                ("nest build myapp", "build specific target"),
+                ("nest build --release", "build with release preset"),
+                ("nest run", "pick target interactively, build & run"),
+                ("nest run myapp", "build and run"),
+                ("nest run myapp -- --arg1", "pass arguments to target"),
+                ("nest test", "build and run all tests"),
+                ("nest test -v", "with verbose output"),
+                ("nest test test_math test_y", "specific tests"),
+                ("nest new myapp", "create new executable"),
+                ("nest new mylib -t static", "create new static library"),
+                ("nest preset list", "show presets"),
+                ("nest preset set release", "change default preset"),
+                ("nest clean", "clean build artifacts"),
+                ("nest clean --all", "full clean (removes .nest/)"),
+            ]
+        )
+        + "\n",
     )
     parser.add_argument("--version", action="version", version=f"nest {_get_version()}")
 
@@ -526,25 +638,28 @@ examples:
     p_list = sub.add_parser("list", help="List projects, tests, and presets")
     p_list.set_defaults(func=_cmd_list)
 
+    p_init = sub.add_parser("init", help="Initialize a Nest project in the current directory")
+    p_init.add_argument("-n", "--name", help="Project name (default: directory name)")
+    p_init.add_argument("-i", "--interactive", action="store_true", help="Prompt to confirm or change project name")
+    p_init.set_defaults(func=_cmd_init)
+
     p_build = sub.add_parser("build", help="Build targets")
     _add_target_args(p_build)
     _add_preset_args(p_build)
+    p_build.add_argument("-v", "--verbose", action="store_true", help="Print raw cmake commands")
     p_build.set_defaults(func=_cmd_build)
 
     p_run = sub.add_parser("run", help="Build and run a target")
-    p_run.add_argument("target", help="Target to run")
+    p_run.add_argument("target", nargs="?", default=None, help="Target to run (omit to pick interactively)")
     p_run.add_argument("args", nargs="*", help="Arguments to pass to target")
     _add_preset_args(p_run)
+    p_run.add_argument("-v", "--verbose", action="store_true", help="Print raw cmake commands")
     p_run.set_defaults(func=_cmd_run)
 
     p_test = sub.add_parser("test", help="Build and run tests")
-    p_test.add_argument(
-        "tests", nargs="*", default=None, help="Specific tests (default: all)"
-    )
+    p_test.add_argument("tests", nargs="*", default=None, help="Specific tests (default: all)")
     _add_preset_args(p_test)
-    p_test.add_argument(
-        "-V", "--verbose", action="store_true", help="Verbose ctest output"
-    )
+    p_test.add_argument("-v", "--verbose", action="store_true", help="Print raw commands")
     p_test.set_defaults(func=_cmd_test)
 
     p_new = sub.add_parser("new", help="Scaffold a new project")
@@ -571,6 +686,21 @@ examples:
     p_preset_set.set_defaults(func=_cmd_preset_set)
 
     args = parser.parse_args()
+
+    if args.command == "init":
+        global ROOT, NEST_DIR, BUILD_DIR, PROJECTS_DIR, TESTS_DIR, CONFIG_FILE
+        ROOT = pathlib.Path.cwd().resolve()
+        NEST_DIR = ROOT / ".nest"
+        BUILD_DIR = NEST_DIR / "build"
+        PROJECTS_DIR = ROOT / "projects"
+        TESTS_DIR = ROOT / "tests"
+        CONFIG_FILE = NEST_DIR / "config.json"
+        _cmd_init(args)
+        return
+
+    if _found_root is None:
+        _error_exit("not inside a Nest project (no CMakeLists.txt with cmake/nest.cmake found)")
+
     if args.command is None:
         _cmd_list(args)
     else:
