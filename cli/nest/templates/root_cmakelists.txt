@@ -1,0 +1,10 @@
+cmake_minimum_required(VERSION 3.28)
+include(cmake/nest.cmake)
+project($NAME)
+
+nest_VERSION(0 0 1)
+nest_INIT(20)
+
+nest_DETECT_PROJECTS()
+nest_ENABLE_TESTS()
+nest_GENERATE_EXPORT()
